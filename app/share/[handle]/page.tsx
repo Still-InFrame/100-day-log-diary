@@ -8,7 +8,9 @@ import {
 } from "@/lib/queries";
 import { computeStreaks } from "@/lib/streaks";
 import { dayNumberFor, formatLongDate, todayISO } from "@/lib/dates";
+import { TOTAL_DAYS } from "@/lib/constants";
 import { ProgressBar } from "@/components/ProgressBar";
+import { CompletionBanner } from "@/components/CompletionBanner";
 import { StreakBanner } from "@/components/StreakBanner";
 import { TrophyCase } from "@/components/TrophyCase";
 import { PublicEntryCard } from "@/components/PublicEntryCard";
@@ -47,6 +49,7 @@ export default async function SharePage({ params }: { params: Params }) {
     Math.max(1, dayNumberFor(todayISO(), startDate)),
   );
   const streak = computeStreaks(entries, startDate);
+  const complete = streak.totalLogged >= TOTAL_DAYS;
   const earned = new Set<BadgeType>(badges.map((b) => b.badge_type));
   const name = profile.display_name ?? handle;
   // Chronological story: Day 1 → latest.
@@ -77,6 +80,8 @@ export default async function SharePage({ params }: { params: Params }) {
           </p>
         </div>
       </header>
+
+      {complete && <CompletionBanner startDate={startDate} celebrate />}
 
       <ProgressBar current={todayDayNumber} />
 

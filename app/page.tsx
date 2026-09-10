@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { getBadges, getCurrentUser, getEntries, getProfile } from "@/lib/queries";
 import { computeStreaks } from "@/lib/streaks";
 import { dayNumberFor, todayISO } from "@/lib/dates";
+import { TOTAL_DAYS } from "@/lib/constants";
 import { ProgressBar } from "@/components/ProgressBar";
+import { CompletionBanner } from "@/components/CompletionBanner";
 import { StreakBanner } from "@/components/StreakBanner";
 import { EntryCard } from "@/components/EntryCard";
 import { BADGE_META } from "@/lib/types";
@@ -22,6 +24,7 @@ export default async function DashboardPage() {
   const today = todayISO();
   const todayDayNumber = Math.min(100, Math.max(1, dayNumberFor(today, startDate)));
   const streak = computeStreaks(entries, startDate);
+  const complete = streak.totalLogged >= TOTAL_DAYS;
   const recent = entries.slice(0, 6);
 
   const loggedToday = entries.some((e) => e.date === today);
@@ -29,6 +32,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {complete && <CompletionBanner startDate={startDate} celebrate />}
       <section className="space-y-4">
         <div>
           <h1 className="text-3xl font-semibold">100 Day AI Build Challenge</h1>
@@ -39,8 +43,9 @@ export default async function DashboardPage() {
         <ProgressBar current={todayDayNumber} />
       </section>
 
-      <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        {loggedToday && todayEntry ? (
+      {!complete && (
+        <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+          {loggedToday && todayEntry ? (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-medium text-emerald-600">
@@ -75,8 +80,9 @@ export default async function DashboardPage() {
               Log today&apos;s app
             </Link>
           </div>
-        )}
-      </section>
+          )}
+        </section>
+      )}
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">Progress</h2>

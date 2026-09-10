@@ -8,8 +8,10 @@ import {
 } from "@/lib/queries";
 import { TrophyCase } from "@/components/TrophyCase";
 import { ShareSettings } from "@/components/ShareSettings";
+import { CompletionBanner } from "@/components/CompletionBanner";
 import { computeStreaks } from "@/lib/streaks";
 import { formatLongDate, todayISO } from "@/lib/dates";
+import { TOTAL_DAYS } from "@/lib/constants";
 import type { BadgeType } from "@/lib/types";
 
 export default async function ProfilePage() {
@@ -24,6 +26,7 @@ export default async function ProfilePage() {
 
   const startDate = profile?.challenge_start_date ?? todayISO();
   const streak = computeStreaks(entries, startDate);
+  const complete = streak.totalLogged >= TOTAL_DAYS;
   const earnedSet = new Set<BadgeType>(badges.map((b) => b.badge_type));
 
   return (
@@ -51,6 +54,8 @@ export default async function ProfilePage() {
           </p>
         </div>
       </div>
+
+      {complete && <CompletionBanner startDate={startDate} celebrate />}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Stat label="Badges earned" value={`${badges.length} / 9`} />
