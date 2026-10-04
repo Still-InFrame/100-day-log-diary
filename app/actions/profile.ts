@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { OWNER_HANDLE } from "@/lib/constants";
 
 // 3-30 chars, lowercase alphanumeric + hyphens, no leading/trailing hyphen.
 // The handle becomes part of a public URL, so keep it URL-safe.
@@ -17,6 +18,24 @@ export async function setPublicHandle(raw: string | null): Promise<HandleResult>
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not authenticated" };
+
+  // The account holding OWNER_HANDLE is the site owner: the public front door
+  // shows its projects and the admin (leads, texting) is gated on it. If the
+  // handle were released, any other account could claim it and become the
+  // owner, so it cannot be changed or cleared from here.
+  const requested = raw === null ? "" : raw.trim().toLowerCase();
+  const { data: current } = await supabase
+    .from("profiles")
+    .select("public_handle")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (current?.public_handle === OWNER_HANDLE && requested !== OWNER_HANDLE) {
+    return {
+      ok: false,
+      error:
+        "This handle runs the public site and admin access, so it can't be changed or removed here.",
+    };
+  }
 
   // Empty/null disables public sharing.
   if (raw === null || raw.trim() === "") {

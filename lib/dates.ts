@@ -28,3 +28,19 @@ export function formatLongDate(date: string): string {
 export function formatShortDate(date: string): string {
   return format(parseISO(date), "MMM d");
 }
+
+// Formats a full timestamp (e.g. a lead's created_at) in the app's timezone.
+// Uses Intl with an explicit zone because server rendering runs in UTC.
+export function formatDateTime(
+  iso: string,
+  timeZone: string = DEFAULT_TIMEZONE,
+): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}

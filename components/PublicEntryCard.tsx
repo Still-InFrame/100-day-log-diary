@@ -1,6 +1,7 @@
 import Image from "next/image";
 import type { Entry } from "@/lib/types";
 import { formatLongDate } from "@/lib/dates";
+import { NotifyMeForm } from "@/components/NotifyMeForm";
 
 // Read-only entry rendering for the public share page. Shows every field
 // (the owner opted into full transparency). Deliberately links nowhere into
@@ -39,12 +40,14 @@ export function PublicEntryCard({ entry }: { entry: Entry }) {
         )}
         {/* Outbound links go through /go so each click is recorded before the
             visitor is redirected. noopener (not noreferrer) keeps the Referer
-            header so the click can be attributed to the page it came from. */}
+            header so the click can be attributed to the page it came from;
+            nofollow keeps search crawlers from following the link and being
+            counted as interest. */}
         {entry.live_url && (
           <a
             href={`/go/${entry.day_number}?t=live`}
             target="_blank"
-            rel="noopener"
+            rel="noopener nofollow"
             className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
           >
             Open app →
@@ -54,13 +57,15 @@ export function PublicEntryCard({ entry }: { entry: Entry }) {
           <a
             href={`/go/${entry.day_number}?t=code`}
             target="_blank"
-            rel="noopener"
+            rel="noopener nofollow"
             className="text-indigo-500 hover:underline"
           >
             View code →
           </a>
         )}
       </div>
+
+      <NotifyMeForm dayNumber={entry.day_number} appName={entry.app_name} />
 
       {entry.screenshot_url && (
         <div className="mt-4 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">

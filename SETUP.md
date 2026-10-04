@@ -24,8 +24,11 @@ In your Supabase dashboard:
 1. Go to **SQL Editor** → **New query**.
 2. Open `supabase/migrations/0001_initial.sql` from this repo, copy the entire contents, paste into the SQL editor.
 3. Click **Run**.
+4. Repeat for every later file in `supabase/migrations/`, in number order (`0002_…`, then `0003_…`).
 
-You should see "Success. No rows returned." This creates the `profiles`, `entries`, and `badges` tables, all Row Level Security policies, the screenshots storage bucket, and the auto-profile-creation trigger.
+You should see "Success. No rows returned." each time. `0001` creates the `profiles`, `entries`, and `badges` tables, all Row Level Security policies, the screenshots storage bucket, and the auto-profile-creation trigger. `0002` adds the live-app link and click tracking. `0003` adds the "Notify me" leads table and the admin stats.
+
+Lead sync to HighLevel is optional and off until two server-side settings are added; the owner's Admin → Settings page lists them.
 
 ## 3. Set up Google OAuth (~5 min)
 

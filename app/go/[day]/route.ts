@@ -3,6 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getEntryByDay, getProfileByHandle } from "@/lib/queries";
 import { OWNER_HANDLE, TOTAL_DAYS } from "@/lib/constants";
 
+// Automated clients that follow links. They are still redirected, but not
+// counted: the click data is meant to measure human interest. This is a
+// best-effort filter on a self-reported header, not a guarantee.
+const BOT_UA =
+  /bot|crawl|spider|slurp|facebookexternalhit|whatsapp|embedly|headless|lighthouse|pingdom|uptime|curl|wget|python|axios|node-fetch|go-http-client|scrapy|okhttp/i;
+
 // Tracked outbound-link redirect for the public showcase. Records a click in
 // app_events, then 302s to the destination. The destination is resolved from
 // the DB (never from a query param), so this cannot be abused as an open
@@ -37,19 +43,24 @@ export async function GET(
     return NextResponse.redirect(home);
   }
 
+  const userAgent = req.headers.get("user-agent") ?? "";
+  const looksAutomated = !userAgent || BOT_UA.test(userAgent);
+
   // Best-effort telemetry — a logging failure must never block the redirect.
-  try {
-    const supabase = await createClient();
-    await supabase.from("app_events").insert({
-      owner_user_id: profile.user_id,
-      event_type: "click",
-      day_number: dayNumber,
-      target: resolvedTarget,
-      referrer: req.headers.get("referer"),
-      user_agent: req.headers.get("user-agent"),
-    });
-  } catch {
-    // swallow: the visitor still gets redirected
+  if (!looksAutomated) {
+    try {
+      const supabase = await createClient();
+      await supabase.from("app_events").insert({
+        owner_user_id: profile.user_id,
+        event_type: "click",
+        day_number: dayNumber,
+        target: resolvedTarget,
+        referrer: req.headers.get("referer")?.slice(0, 2000) ?? null,
+        user_agent: userAgent.slice(0, 1000),
+      });
+    } catch {
+      // swallow: the visitor still gets redirected
+    }
   }
 
   return NextResponse.redirect(dest, 302);

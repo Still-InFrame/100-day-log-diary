@@ -6,6 +6,13 @@ export const TOTAL_DAYS = 100;
 // showcase + /go links must carry the handle instead of this constant.
 export const OWNER_HANDLE = "savion";
 
+// The exact sentence shown beside the SMS checkbox on the "Notify me" form.
+// The form displays it and the server stores it as the consent record, so both
+// must come from this one place.
+export function smsConsentText(appName: string): string {
+  return `Text me about ${appName}. Message and data rates may apply. Reply STOP to opt out.`;
+}
+
 // Used by todayISO() and any "what date is it right now?" logic.
 // Hardcoded for now. Replace call sites with a per-user setting if a
 // settings panel ever ships.

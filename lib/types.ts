@@ -27,6 +27,44 @@ export type Profile = {
   updated_at: string;
 };
 
+export type GhlSyncStatus = "pending" | "synced" | "failed" | "skipped";
+
+// A "Notify me" signup for one app. Mirrors public.app_interest.
+export type Lead = {
+  id: string;
+  owner_user_id: string;
+  day_number: number;
+  app_name: string;
+  first_name: string;
+  email: string;
+  phone: string | null;
+  sms_consent: boolean;
+  sms_consent_at: string | null;
+  consent_text: string | null;
+  ghl_contact_id: string | null;
+  ghl_sync_status: GhlSyncStatus;
+  ghl_sync_error: string | null;
+  ghl_synced_at: string | null;
+  last_texted_at: string | null;
+  created_at: string;
+};
+
+export type ClickStat = {
+  day_number: number;
+  clicks: number;
+  live_clicks: number;
+  code_clicks: number;
+  last_click: string | null;
+};
+
+export type InterestStat = {
+  day_number: number;
+  leads: number;
+  with_phone: number;
+  sms_ok: number;
+  last_signup: string | null;
+};
+
 export type BadgeType =
   | "day_10"
   | "day_25"

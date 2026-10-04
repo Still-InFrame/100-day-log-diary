@@ -39,13 +39,17 @@ export async function updateSession(request: NextRequest) {
   const isPublicHome = url.pathname === "/";
   const isTrackedRedirect =
     url.pathname === "/go" || url.pathname.startsWith("/go/");
+  // Crawlers fetch this without a session; redirecting it to /login would
+  // make the robots rules unreadable.
+  const isRobots = url.pathname === "/robots.txt";
 
   if (
     !user &&
     !isAuthRoute &&
     !isPublicShare &&
     !isPublicHome &&
-    !isTrackedRedirect
+    !isTrackedRedirect &&
+    !isRobots
   ) {
     const redirect = url.clone();
     redirect.pathname = "/login";
