@@ -5,7 +5,8 @@ export type Entry = {
   date: string;
   app_name: string;
   description: string;
-  repo_url: string;
+  repo_url: string | null;
+  live_url: string | null;
   tech_stack: string[];
   time_spent_minutes: number;
   learnings: string | null;

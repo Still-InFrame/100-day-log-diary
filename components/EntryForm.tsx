@@ -27,6 +27,7 @@ export function EntryForm({
   const [appName, setAppName] = useState(existing?.app_name ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
   const [repoUrl, setRepoUrl] = useState(existing?.repo_url ?? "");
+  const [liveUrl, setLiveUrl] = useState(existing?.live_url ?? "");
   const [techStack, setTechStack] = useState<string[]>(existing?.tech_stack ?? []);
   const [timeSpent, setTimeSpent] = useState<number>(
     existing?.time_spent_minutes ?? 60,
@@ -77,6 +78,7 @@ export function EntryForm({
         app_name: appName,
         description,
         repo_url: repoUrl,
+        live_url: liveUrl,
         tech_stack: techStack,
         time_spent_minutes: timeSpent,
         learnings: learnings || null,
@@ -165,16 +167,29 @@ export function EntryForm({
           />
         </Field>
 
-        <Field label="Link to code or live demo">
+        <Field label="Code / repo link">
           <input
             type="url"
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
-            required
             placeholder="https://github.com/..."
             className={inputClass}
           />
         </Field>
+
+        <Field label="Live app link">
+          <input
+            type="url"
+            value={liveUrl}
+            onChange={(e) => setLiveUrl(e.target.value)}
+            placeholder="https://your-app.com"
+            className={inputClass}
+          />
+        </Field>
+        <p className="-mt-2 text-xs text-zinc-500">
+          Add at least one. The live app link is what visitors open from your
+          public showcase (and what click-tracking counts).
+        </p>
 
         <Field label="Tech stack">
           <TechTagInput value={techStack} onChange={setTechStack} />

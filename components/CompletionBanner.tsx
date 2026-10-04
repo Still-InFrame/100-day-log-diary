@@ -31,9 +31,13 @@ function fireConfetti() {
 export function CompletionBanner({
   startDate,
   celebrate = false,
+  name,
 }: {
   startDate: string;
   celebrate?: boolean;
+  // Pass on public pages so the copy names the builder in the third person
+  // instead of addressing the visitor as "You".
+  name?: string;
 }) {
   const fired = useRef(false);
 
@@ -74,7 +78,8 @@ export function CompletionBanner({
           {TOTAL_DAYS} days. {TOTAL_DAYS} apps. Done.
         </h2>
         <p className="mt-2 max-w-2xl text-sm text-white/85 sm:text-base">
-          You shipped one app every single day for {TOTAL_DAYS} straight days —{" "}
+          {name ?? "You"} shipped one app every single day for {TOTAL_DAYS}{" "}
+          straight days —{" "}
           {startLabel} through {endLabel}. The chain never broke.
         </p>
         <div className="mt-5 flex flex-wrap gap-2 text-sm font-medium">

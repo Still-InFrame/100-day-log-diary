@@ -37,14 +37,29 @@ export function PublicEntryCard({ entry }: { entry: Entry }) {
             {"☆".repeat(5 - entry.mood)}
           </span>
         )}
-        <a
-          href={entry.repo_url}
-          target="_blank"
-          rel="noreferrer"
-          className="text-indigo-500 hover:underline"
-        >
-          View code / demo →
-        </a>
+        {/* Outbound links go through /go so each click is recorded before the
+            visitor is redirected. noopener (not noreferrer) keeps the Referer
+            header so the click can be attributed to the page it came from. */}
+        {entry.live_url && (
+          <a
+            href={`/go/${entry.day_number}?t=live`}
+            target="_blank"
+            rel="noopener"
+            className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+          >
+            Open app →
+          </a>
+        )}
+        {entry.repo_url && (
+          <a
+            href={`/go/${entry.day_number}?t=code`}
+            target="_blank"
+            rel="noopener"
+            className="text-indigo-500 hover:underline"
+          >
+            View code →
+          </a>
+        )}
       </div>
 
       {entry.screenshot_url && (

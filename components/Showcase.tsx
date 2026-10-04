@@ -1,0 +1,101 @@
+import Image from "next/image";
+import { computeStreaks } from "@/lib/streaks";
+import { dayNumberFor, formatLongDate, todayISO } from "@/lib/dates";
+import { TOTAL_DAYS } from "@/lib/constants";
+import { ProgressBar } from "@/components/ProgressBar";
+import { CompletionBanner } from "@/components/CompletionBanner";
+import { StreakBanner } from "@/components/StreakBanner";
+import { TrophyCase } from "@/components/TrophyCase";
+import { PublicEntryCard } from "@/components/PublicEntryCard";
+import type { Badge, BadgeType, Entry, Profile } from "@/lib/types";
+
+// The public, read-only view of one person's challenge. Rendered at "/" for
+// anonymous visitors (the lead-magnet front door) and at /share/[handle].
+// Deliberately links nowhere into the authenticated app.
+export function Showcase({
+  profile,
+  entries,
+  badges,
+  handle,
+}: {
+  profile: Profile;
+  entries: Entry[];
+  badges: Badge[];
+  handle: string;
+}) {
+  const startDate = profile.challenge_start_date;
+  const todayDayNumber = Math.min(
+    TOTAL_DAYS,
+    Math.max(1, dayNumberFor(todayISO(), startDate)),
+  );
+  const streak = computeStreaks(entries, startDate);
+  const complete = streak.totalLogged >= TOTAL_DAYS;
+  const earned = new Set<BadgeType>(badges.map((b) => b.badge_type));
+  const name = profile.display_name ?? handle;
+  // Chronological story: Day 1 → latest.
+  const ordered = [...entries].sort((a, b) => a.day_number - b.day_number);
+
+  return (
+    <div className="space-y-8">
+      <header className="flex items-center gap-4">
+        {profile.avatar_url ? (
+          <Image
+            src={profile.avatar_url}
+            alt=""
+            width={64}
+            height={64}
+            className="h-16 w-16 rounded-full object-cover"
+          />
+        ) : (
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-zinc-200 text-2xl font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+            {name.charAt(0).toUpperCase()}
+          </div>
+        )}
+        <div>
+          <h1 className="text-2xl font-semibold">
+            {name}&apos;s 100 Day Build Challenge
+          </h1>
+          <p className="text-sm text-zinc-500">
+            One app per day · started {formatLongDate(startDate)}
+          </p>
+        </div>
+      </header>
+
+      {complete && (
+        <CompletionBanner startDate={startDate} celebrate name={name} />
+      )}
+
+      <ProgressBar current={todayDayNumber} />
+
+      <StreakBanner streak={streak} />
+
+      {badges.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-lg font-semibold">Badges</h2>
+          <TrophyCase earned={earned} />
+        </section>
+      )}
+
+      <section>
+        <h2 className="mb-3 text-lg font-semibold">
+          The build log ({entries.length})
+        </h2>
+        {ordered.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
+            No entries logged yet.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {ordered.map((e) => (
+              <PublicEntryCard key={e.id} entry={e} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <footer className="border-t border-zinc-200 pt-6 text-center text-xs text-zinc-400 dark:border-zinc-800">
+        Public progress page · 100 Day Log Diary
+      </footer>
+    </div>
+  );
+}

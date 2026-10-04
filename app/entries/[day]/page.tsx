@@ -87,16 +87,32 @@ export default async function EntryDetailPage({
       <dl className="grid gap-4 rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900 sm:grid-cols-3">
         <Stat label="Time spent" value={`${entry.time_spent_minutes} min`} />
         <Stat
-          label="Link"
+          label="Links"
           value={
-            <a
-              href={entry.repo_url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-indigo-500 hover:underline"
-            >
-              View →
-            </a>
+            // Direct links on purpose: this is the owner's own view, and
+            // routing it through /go would count the owner's clicks as interest.
+            <span className="flex flex-wrap gap-x-4 gap-y-1">
+              {entry.live_url && (
+                <a
+                  href={entry.live_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-indigo-500 hover:underline"
+                >
+                  App →
+                </a>
+              )}
+              {entry.repo_url && (
+                <a
+                  href={entry.repo_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-indigo-500 hover:underline"
+                >
+                  Code →
+                </a>
+              )}
+            </span>
           }
         />
         <Stat

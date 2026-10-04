@@ -33,8 +33,20 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute =
     url.pathname.startsWith("/login") || url.pathname.startsWith("/auth");
   const isPublicShare = url.pathname.startsWith("/share");
+  // "/" is the public lead-magnet front door (renders the owner's showcase for
+  // anonymous visitors); "/go/*" is the click-tracking redirect those visitors
+  // follow. Both must be reachable without a session.
+  const isPublicHome = url.pathname === "/";
+  const isTrackedRedirect =
+    url.pathname === "/go" || url.pathname.startsWith("/go/");
 
-  if (!user && !isAuthRoute && !isPublicShare) {
+  if (
+    !user &&
+    !isAuthRoute &&
+    !isPublicShare &&
+    !isPublicHome &&
+    !isTrackedRedirect
+  ) {
     const redirect = url.clone();
     redirect.pathname = "/login";
     return NextResponse.redirect(redirect);

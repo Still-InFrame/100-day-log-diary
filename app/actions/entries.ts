@@ -12,7 +12,8 @@ export type EntryFormInput = {
   date: string;
   app_name: string;
   description: string;
-  repo_url: string;
+  repo_url?: string | null;
+  live_url?: string | null;
   tech_stack: string[];
   time_spent_minutes: number;
   learnings?: string | null;
@@ -84,7 +85,11 @@ export async function saveEntry(input: EntryFormInput): Promise<SaveEntryResult>
   if (!input.app_name.trim()) return { ok: false, error: "App name is required" };
   if (!input.description.trim())
     return { ok: false, error: "Description is required" };
-  if (!input.repo_url.trim()) return { ok: false, error: "Repo URL is required" };
+  if (!input.repo_url?.trim() && !input.live_url?.trim())
+    return {
+      ok: false,
+      error: "Add at least one link — a code/repo link or a live app link.",
+    };
   if (!input.tech_stack.length)
     return { ok: false, error: "At least one tech tag is required" };
   if (!Number.isFinite(input.time_spent_minutes) || input.time_spent_minutes < 0)
@@ -105,7 +110,8 @@ export async function saveEntry(input: EntryFormInput): Promise<SaveEntryResult>
     date: input.date,
     app_name: input.app_name.trim(),
     description: input.description.trim(),
-    repo_url: input.repo_url.trim(),
+    repo_url: input.repo_url?.trim() || null,
+    live_url: input.live_url?.trim() || null,
     tech_stack: input.tech_stack.map((t) => t.trim()).filter(Boolean),
     time_spent_minutes: Math.round(input.time_spent_minutes),
     learnings: input.learnings?.trim() || null,

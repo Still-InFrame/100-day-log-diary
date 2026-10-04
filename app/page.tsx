@@ -1,9 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getBadges, getCurrentUser, getEntries, getProfile } from "@/lib/queries";
+import {
+  getBadges,
+  getCurrentUser,
+  getEntries,
+  getProfile,
+  getProfileByHandle,
+} from "@/lib/queries";
 import { computeStreaks } from "@/lib/streaks";
 import { dayNumberFor, todayISO } from "@/lib/dates";
-import { TOTAL_DAYS } from "@/lib/constants";
+import { OWNER_HANDLE, TOTAL_DAYS } from "@/lib/constants";
+import { Showcase } from "@/components/Showcase";
 import { ProgressBar } from "@/components/ProgressBar";
 import { CompletionBanner } from "@/components/CompletionBanner";
 import { StreakBanner } from "@/components/StreakBanner";
@@ -12,7 +19,24 @@ import { BADGE_META } from "@/lib/types";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) {
+    // Public lead-magnet front door: strangers landing on the apex see the
+    // owner's projects, not a login wall. The proxy lets "/" through for anon.
+    const ownerProfile = await getProfileByHandle(OWNER_HANDLE);
+    if (!ownerProfile) redirect("/login");
+    const [ownerEntries, ownerBadges] = await Promise.all([
+      getEntries(ownerProfile.user_id),
+      getBadges(ownerProfile.user_id),
+    ]);
+    return (
+      <Showcase
+        profile={ownerProfile}
+        entries={ownerEntries}
+        badges={ownerBadges}
+        handle={OWNER_HANDLE}
+      />
+    );
+  }
 
   const [profile, entries, badges] = await Promise.all([
     getProfile(user.id),
