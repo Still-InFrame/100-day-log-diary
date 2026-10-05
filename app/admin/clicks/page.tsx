@@ -11,44 +11,54 @@ import {
   POPULAR_MIN_CLICKERS,
   POPULAR_MIN_VIEWERS,
 } from "@/lib/constants";
-import { formatDateTime } from "@/lib/dates";
+import { formatDateTime, formatDateTimeShort } from "@/lib/dates";
+import {
+  PopularityTable,
+  type PopularityRow,
+} from "@/components/admin/PopularityTable";
 import type { EngagementStat } from "@/lib/types";
 
 // The ranking rule lives in the database (popular_apps()); these helpers
-// mirror it so the table can explain where each app stands. Everything here
-// counts people, not events.
+// mirror it so the table can explain where each app stands. "Unique" counts
+// people (one browser = one person); "total" counts every view or click.
 
-function qualifies(s: EngagementStat): boolean {
+const NO_ACTIVITY: Omit<EngagementStat, "day_number"> = {
+  views: 0,
+  clicks: 0,
+  live_clicks: 0,
+  code_clicks: 0,
+  popular_clicks: 0,
+  last_click: null,
+  unique_views: 0,
+  unique_clicks: 0,
+};
+
+function qualifies(s: Pick<EngagementStat, "unique_clicks" | "unique_views">): boolean {
   return (
     s.unique_clicks >= POPULAR_MIN_CLICKERS &&
     s.unique_views >= POPULAR_MIN_VIEWERS
   );
 }
 
-// Share of the people who saw an app that clicked it. Capped at 1: a click
-// can arrive without its view having been counted (a very fast click, or a
-// visitor whose browser blocks the view report).
-function rate(clickers: number, viewers: number): number | null {
-  return viewers > 0 ? Math.min(1, clickers / viewers) : null;
+// Unique clicks out of unique views. Capped at 1: a click can arrive without
+// its view having been counted (a very fast click, or a visitor whose browser
+// blocks the view report).
+function rate(uniqueClicks: number, uniqueViews: number): number | null {
+  return uniqueViews > 0 ? Math.min(1, uniqueClicks / uniqueViews) : null;
 }
 
 function formatRate(r: number | null): string {
   return r === null ? "—" : `${Math.round(r * 100)}%`;
 }
 
-// Clicks beyond each person's first: people coming back to the same app.
-function repeatClicks(s: EngagementStat): number {
-  return Math.max(0, s.clicks - s.unique_clicks);
-}
-
 // What an app still needs before it can be ranked.
-function shortfall(s: EngagementStat): string {
+function shortfall(s: Pick<EngagementStat, "unique_clicks" | "unique_views">): string {
   const needs: string[] = [];
   if (s.unique_views < POPULAR_MIN_VIEWERS) {
-    needs.push(`${POPULAR_MIN_VIEWERS - s.unique_views} more people to see it`);
+    needs.push(`${POPULAR_MIN_VIEWERS - s.unique_views} more unique views`);
   }
   if (s.unique_clicks < POPULAR_MIN_CLICKERS) {
-    needs.push(`${POPULAR_MIN_CLICKERS - s.unique_clicks} more people to click`);
+    needs.push(`${POPULAR_MIN_CLICKERS - s.unique_clicks} more unique clicks`);
   }
   return `Needs ${needs.join(" and ")}`;
 }
@@ -63,51 +73,93 @@ export default async function AdminClicksPage() {
     getVisitorTotals(),
   ]);
 
-  const appNames = new Map(entries.map((e) => [e.day_number, e.app_name]));
+  const statsByDay = new Map(stats.map((s) => [s.day_number, s]));
   const leadsByDay = new Map(interest.map((s) => [s.day_number, s.leads]));
   const popularRank = new Map(popularDays.map((day, i) => [day, i + 1]));
 
-  // Ranked apps first, in the same order the database uses; then the rest by
-  // how close they are to having enough data.
-  const ranked = [...stats].sort((a, b) => {
-    const qa = qualifies(a);
-    const qb = qualifies(b);
-    if (qa !== qb) return qa ? -1 : 1;
-    if (qa) {
-      const ra = Math.round((rate(a.unique_clicks, a.unique_views) ?? 0) * 100);
-      const rb = Math.round((rate(b.unique_clicks, b.unique_views) ?? 0) * 100);
+  // Every app gets a row, including ones nobody has seen yet.
+  const unordered = entries.map((entry) => {
+    const s = statsByDay.get(entry.day_number) ?? NO_ACTIVITY;
+    const rank = popularRank.get(entry.day_number);
+    const ranked = qualifies(s);
+    return {
+      day: entry.day_number,
+      app: entry.app_name,
+      uniqueViews: s.unique_views,
+      views: s.views,
+      uniqueClicks: s.unique_clicks,
+      clicks: s.clicks,
+      popularClicks: s.popular_clicks,
+      rate: rate(s.unique_clicks, s.unique_views),
+      // Clicks beyond each person's first: people coming back to the app.
+      repeat: Math.max(0, s.clicks - s.unique_clicks),
+      signups: leadsByDay.get(entry.day_number) ?? 0,
+      status: rank
+        ? ({ kind: "popular", rank } as const)
+        : ranked
+          ? ({ kind: "ranked" } as const)
+          : ({ kind: "needs", text: shortfall(s) } as const),
+      ranked,
+      lastClick: s.last_click,
+      lastClickLabel: s.last_click ? formatDateTimeShort(s.last_click) : null,
+      lastClickFull: s.last_click ? formatDateTime(s.last_click) : null,
+    };
+  });
+
+  // The site's ranking order: ranked apps first, in the order the database
+  // uses; then the rest by how close they are to having enough data.
+  const ordered = [...unordered].sort((a, b) => {
+    if (a.ranked !== b.ranked) return a.ranked ? -1 : 1;
+    if (a.ranked) {
       return (
-        rb - ra ||
-        repeatClicks(b) - repeatClicks(a) ||
-        (leadsByDay.get(b.day_number) ?? 0) - (leadsByDay.get(a.day_number) ?? 0)
+        Math.round((b.rate ?? 0) * 100) - Math.round((a.rate ?? 0) * 100) ||
+        b.repeat - a.repeat ||
+        b.signups - a.signups ||
+        a.day - b.day
       );
     }
     return (
-      b.unique_clicks - a.unique_clicks ||
-      b.unique_views - a.unique_views ||
-      a.day_number - b.day_number
+      b.uniqueClicks - a.uniqueClicks ||
+      b.uniqueViews - a.uniqueViews ||
+      b.signups - a.signups ||
+      a.day - b.day
     );
   });
 
-  const rankedCount = stats.filter(qualifies).length;
+  const rows: PopularityRow[] = ordered.map((row, i) => ({
+    day: row.day,
+    app: row.app,
+    uniqueViews: row.uniqueViews,
+    views: row.views,
+    uniqueClicks: row.uniqueClicks,
+    clicks: row.clicks,
+    popularClicks: row.popularClicks,
+    rate: row.rate,
+    repeat: row.repeat,
+    signups: row.signups,
+    status: row.status,
+    rankOrder: i,
+    lastClick: row.lastClick,
+    lastClickLabel: row.lastClickLabel,
+    lastClickFull: row.lastClickFull,
+  }));
+
+  const rankedCount = unordered.filter((r) => r.ranked).length;
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <Tile label="Total views" value={String(totals.views)} />
         <Tile
-          label="People who saw an app"
+          label="Unique views"
           value={String(totals.people_saw)}
-          note={`${totals.views} views in total`}
+          note="people who saw an app"
         />
+        <Tile label="Total clicks" value={String(totals.clicks)} />
         <Tile
-          label="People who clicked"
+          label="Unique clicks"
           value={String(totals.people_clicked)}
-          note={`${totals.clicks} clicks in total`}
-        />
-        <Tile
-          label="Clicked at least one"
-          value={formatRate(rate(totals.people_clicked, totals.people_saw))}
-          note="of the people who saw an app"
+          note={`${formatRate(rate(totals.people_clicked, totals.people_saw))} of unique views`}
         />
         <Tile
           label="Apps ranked"
@@ -118,115 +170,22 @@ export default async function AdminClicksPage() {
 
       <section>
         <h2 className="mb-1 text-lg font-semibold">Popularity by app</h2>
-        <p className="mb-3 text-sm text-zinc-500">
-          The big numbers count people: someone who reloads the page or clicks
-          the same app five times is one person. The small numbers underneath
-          are the raw totals. An app is ranked once {POPULAR_MIN_CLICKERS}{" "}
-          different people have clicked it and {POPULAR_MIN_VIEWERS} different
-          people have seen it. Ranked apps are ordered by click rate (people
-          who clicked out of people who saw it); apps on the same percent are
-          ordered by repeat clicks, then signups. The top {POPULAR_COUNT}{" "}
-          appear as &ldquo;Most popular&rdquo; on your public page.
+        <p className="mb-2 text-sm text-zinc-500">
+          Total counts every view or click. Unique counts each person once,
+          however often they come back. Click rate is unique clicks out of
+          unique views. An app is ranked once it has {POPULAR_MIN_CLICKERS}{" "}
+          unique clicks and {POPULAR_MIN_VIEWERS} unique views; ranked apps
+          are ordered by click rate, then repeat clicks, then signups, and
+          the top {POPULAR_COUNT} appear as &ldquo;Most popular&rdquo; on your
+          public page.
         </p>
-        <p className="mb-3 text-xs text-zinc-500">
-          A &ldquo;person&rdquo; is one browser: the same person on a phone
-          and a laptop counts twice. A view is counted when a card has been on
-          screen for a second. Visitors see the list in a different order
-          each, so position does not decide the result. Known crawlers and
-          your own signed-in visits are left out; some automated traffic can
-          still slip through.
+        <p className="mb-4 text-xs text-zinc-500">
+          A person is one browser, so the same person on a phone and a laptop
+          counts twice. A view is counted when a card has been on screen for a
+          second. Known crawlers and your own signed-in visits are left out;
+          some automated traffic can still slip through.
         </p>
-        {ranked.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
-            No views or clicks recorded yet.
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-zinc-500">
-                <tr>
-                  <th className="px-4 py-3">App</th>
-                  <th className="px-4 py-3 text-right">Seen by</th>
-                  <th className="px-4 py-3 text-right">Clicked by</th>
-                  <th className="px-4 py-3 text-right">Click rate</th>
-                  <th className="px-4 py-3 text-right">Repeat clicks</th>
-                  <th className="px-4 py-3 text-right">Signups</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Last click</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ranked.map((s) => {
-                  const rank = popularRank.get(s.day_number);
-                  const isRanked = qualifies(s);
-                  return (
-                    <tr
-                      key={s.day_number}
-                      className="border-t border-zinc-100 align-top dark:border-zinc-800"
-                    >
-                      <td className="px-4 py-3">
-                        <span className="font-medium">
-                          {appNames.get(s.day_number) ?? "Unknown app"}
-                        </span>{" "}
-                        <span className="text-xs text-zinc-500">
-                          Day {s.day_number}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {s.unique_views}
-                        <div className="text-xs text-zinc-500">
-                          {s.views} views
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {s.unique_clicks}
-                        <div className="text-xs text-zinc-500">
-                          {s.clicks} clicks
-                        </div>
-                        {s.popular_clicks > 0 && (
-                          <div className="text-xs text-zinc-500">
-                            +{s.popular_clicks} from Most popular
-                          </div>
-                        )}
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-right tabular-nums ${
-                          isRanked ? "font-semibold" : "text-zinc-400"
-                        }`}
-                      >
-                        {formatRate(rate(s.unique_clicks, s.unique_views))}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {repeatClicks(s)}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {leadsByDay.get(s.day_number) ?? 0}
-                      </td>
-                      <td className="px-4 py-3">
-                        {rank ? (
-                          <span className="whitespace-nowrap rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200">
-                            Most popular #{rank}
-                          </span>
-                        ) : isRanked ? (
-                          <span className="text-xs text-zinc-600 dark:text-zinc-300">
-                            Ranked
-                          </span>
-                        ) : (
-                          <span className="text-xs text-zinc-500">
-                            {shortfall(s)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-500">
-                        {s.last_click ? formatDateTime(s.last_click) : "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <PopularityTable rows={rows} />
       </section>
     </div>
   );
@@ -239,7 +198,7 @@ function Tile({
 }: {
   label: string;
   value: string;
-  note: string;
+  note?: string;
 }) {
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -247,7 +206,7 @@ function Tile({
         {label}
       </div>
       <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
-      <div className="mt-0.5 text-xs text-zinc-500">{note}</div>
+      {note && <div className="mt-0.5 text-xs text-zinc-500">{note}</div>}
     </div>
   );
 }

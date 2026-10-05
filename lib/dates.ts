@@ -48,3 +48,17 @@ export function formatDateTime(
     minute: "2-digit",
   }).format(new Date(iso));
 }
+
+// The same moment without the year, for tight table cells ("Oct 5, 1:45 AM").
+export function formatDateTimeShort(
+  iso: string,
+  timeZone: string = DEFAULT_TIMEZONE,
+): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}
