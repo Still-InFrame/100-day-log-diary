@@ -6,6 +6,7 @@ import type {
   InterestStat,
   Lead,
   Profile,
+  VisitorTotals,
 } from "./types";
 
 export async function getCurrentUser() {
@@ -120,7 +121,21 @@ export async function getEngagementStats(): Promise<EngagementStat[]> {
     code_clicks: Number(r.code_clicks),
     popular_clicks: Number(r.popular_clicks),
     last_click: r.last_click,
+    unique_views: Number(r.unique_views),
+    unique_clicks: Number(r.unique_clicks),
   }));
+}
+
+export async function getVisitorTotals(): Promise<VisitorTotals> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("app_visitor_totals");
+  const row = (data as VisitorTotals[] | null)?.[0];
+  return {
+    views: Number(row?.views ?? 0),
+    clicks: Number(row?.clicks ?? 0),
+    people_saw: Number(row?.people_saw ?? 0),
+    people_clicked: Number(row?.people_clicked ?? 0),
+  };
 }
 
 // Day numbers of one user's "Most popular" apps, best first. Public: works

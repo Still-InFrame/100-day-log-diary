@@ -55,6 +55,8 @@ export type Lead = {
 // Per-app views and clicks. `views`, `clicks`, `live_clicks` and `code_clicks`
 // come from the shuffled list only; `popular_clicks` are clicks made from the
 // "Most popular" row and are kept out of the click rate.
+// `unique_views` / `unique_clicks` count people (distinct visitor IDs, plus
+// one for each event that has no ID): the same browser counts once.
 export type EngagementStat = {
   day_number: number;
   views: number;
@@ -63,6 +65,18 @@ export type EngagementStat = {
   code_clicks: number;
   popular_clicks: number;
   last_click: string | null;
+  unique_views: number;
+  unique_clicks: number;
+};
+
+// Whole-page totals. `people_saw` / `people_clicked` are people who saw or
+// clicked ANY app; they are not the sum of the per-app figures, because one
+// person usually sees several apps.
+export type VisitorTotals = {
+  views: number;
+  clicks: number;
+  people_saw: number;
+  people_clicked: number;
 };
 
 export type InterestStat = {

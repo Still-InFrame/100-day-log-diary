@@ -7,12 +7,14 @@ export const TOTAL_DAYS = 100;
 export const OWNER_HANDLE = "savion";
 
 // The bar an app must clear to appear in the public "Most popular" row, and
-// how many apps that row shows. The ranking itself runs in the database
-// (popular_apps() in migration 0005), where the same numbers are fixed so an
-// anonymous caller cannot lower them. These copies are for explaining the
-// rule in the admin. Change both together.
-export const POPULAR_MIN_CLICKS = 10;
-export const POPULAR_MIN_VIEWS = 50;
+// how many apps that row shows. Both numbers count PEOPLE (distinct visitors),
+// not events: 10 different people clicked it, 50 different people saw it.
+// The ranking itself runs in the database (popular_apps(), last defined in
+// migration 0007), where the same numbers are fixed so an anonymous caller
+// cannot lower them. These copies are for explaining the rule in the admin.
+// Change both together.
+export const POPULAR_MIN_CLICKERS = 10;
+export const POPULAR_MIN_VIEWERS = 50;
 export const POPULAR_COUNT = 3;
 
 // The exact sentence shown beside the SMS checkbox on the "Notify me" form.

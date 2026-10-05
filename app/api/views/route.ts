@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfileByHandle } from "@/lib/queries";
 import { looksAutomated } from "@/lib/bots";
 import { recordingEnabled } from "@/lib/recording";
+import { parseVisitorId } from "@/lib/visitor";
 import { TOTAL_DAYS } from "@/lib/constants";
 
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (!recordingEnabled()) return done();
   if (looksAutomated(req.headers.get("user-agent"))) return done();
 
-  let payload: { handle?: unknown; days?: unknown };
+  let payload: { handle?: unknown; days?: unknown; visitor?: unknown };
   try {
     const raw = await req.text();
     if (raw.length > MAX_BODY_CHARS) return done();
@@ -54,6 +55,8 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (user?.id === profile.user_id) return done();
 
+  const visitorId = parseVisitorId(payload.visitor);
+
   // Best-effort: a failed write only loses a few views.
   await supabase.from("app_events").insert(
     days.map((day) => ({
@@ -61,6 +64,7 @@ export async function POST(req: NextRequest) {
       event_type: "impression",
       day_number: day,
       source: "list",
+      visitor_id: visitorId,
     })),
   );
 

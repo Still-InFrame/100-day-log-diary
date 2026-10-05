@@ -4,6 +4,7 @@ import { getEntryByDay, getProfileByHandle } from "@/lib/queries";
 import { OWNER_HANDLE, TOTAL_DAYS } from "@/lib/constants";
 import { looksAutomated } from "@/lib/bots";
 import { recordingEnabled } from "@/lib/recording";
+import { parseVisitorId } from "@/lib/visitor";
 
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
 
@@ -84,6 +85,9 @@ export async function GET(
           day_number: dayNumber,
           target: resolvedTarget,
           source,
+          // Added to the link by ViewTracker in the visitor's browser. Absent
+          // when scripts are blocked; the click still counts, as its own person.
+          visitor_id: parseVisitorId(req.nextUrl.searchParams.get("v")),
           referrer: req.headers.get("referer")?.slice(0, 2000) ?? null,
           user_agent: userAgent.slice(0, 1000),
         });
