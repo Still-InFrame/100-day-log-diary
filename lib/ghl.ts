@@ -1,38 +1,60 @@
-// Minimal HighLevel (LeadConnector) API client.
-// Server-only: it reads the Private Integration Token from the environment.
+// HighLevel (LeadConnector) API client: OAuth token calls and the handful of
+// CRM calls this app makes. Pure HTTP, no database access.
+// Server-only: it handles the client secret and users' access tokens.
 // Never import this from a "use client" file.
 
-const BASE_URL = "https://services.leadconnectorhq.com";
-// Dated API versions, as used in HighLevel's Private Integration guide. Their
-// reference also documents a newer "v3"; change these two constants to move.
-const CONTACTS_API_VERSION = "2021-07-28";
-const CONVERSATIONS_API_VERSION = "2021-04-15";
+export const GHL_API_BASE_URL = "https://services.leadconnectorhq.com";
+// HighLevel's current API version. The version is a per-request header and is
+// independent of how the request is authenticated.
+const API_VERSION = "v3";
 const REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_APP_BASE_URL = "https://app.gohighlevel.com";
+const DEFAULT_INSTALL_BASE_URL =
+  "https://marketplace.gohighlevel.com/oauth/chooselocation";
 
-export type GhlConfig = {
-  token: string;
-  locationId: string;
+// What the Marketplace app must be granted: save contacts and notes, and send
+// conversation messages.
+export const GHL_SCOPES = ["contacts.write", "conversations/message.write"];
+
+// ---------- app (site-level) configuration ----------
+
+export type GhlAppConfig = {
+  clientId: string;
+  clientSecret: string;
+  // Optional override: the exact Install Link shown in the Marketplace app's
+  // Auth settings, for when it differs from the standard format.
+  installUrl: string | null;
   appBaseUrl: string;
 };
 
-// Which settings are present, without exposing their values. Safe to render.
-export function getGhlStatus() {
+// Which site-level settings are present, without exposing their values.
+export function getGhlAppStatus() {
   return {
-    hasToken: Boolean(process.env.GHL_PRIVATE_TOKEN?.trim()),
-    hasLocationId: Boolean(process.env.GHL_LOCATION_ID?.trim()),
+    hasClientId: Boolean(process.env.GHL_CLIENT_ID?.trim()),
+    hasClientSecret: Boolean(process.env.GHL_CLIENT_SECRET?.trim()),
   };
 }
 
-export function getGhlConfig(): GhlConfig | null {
-  const token = process.env.GHL_PRIVATE_TOKEN?.trim();
-  const locationId = process.env.GHL_LOCATION_ID?.trim();
-  if (!token || !locationId) return null;
-  const appBaseUrl = (
-    process.env.GHL_APP_BASE_URL?.trim() || DEFAULT_APP_BASE_URL
-  ).replace(/\/+$/, "");
-  return { token, locationId, appBaseUrl };
+export function getGhlAppBaseUrl(): string {
+  return (process.env.GHL_APP_BASE_URL?.trim() || DEFAULT_APP_BASE_URL).replace(
+    /\/+$/,
+    "",
+  );
 }
+
+export function getGhlAppConfig(): GhlAppConfig | null {
+  const clientId = process.env.GHL_CLIENT_ID?.trim();
+  const clientSecret = process.env.GHL_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) return null;
+  return {
+    clientId,
+    clientSecret,
+    installUrl: process.env.GHL_INSTALL_URL?.trim() || null,
+    appBaseUrl: getGhlAppBaseUrl(),
+  };
+}
+
+// ---------- errors ----------
 
 export class GhlError extends Error {
   status: number;
@@ -43,35 +65,34 @@ export class GhlError extends Error {
   }
 }
 
-// HighLevel error bodies vary; `{ message: string | string[] }` is the usual
-// shape. Fall back to the raw text so the admin always sees what came back.
+// HighLevel error bodies vary: `{ message: string | string[] }` on API calls,
+// `{ error, error_description }` on the token endpoint. Fall back to the raw
+// text so whoever is debugging always sees what came back.
 function describeError(status: number, payload: unknown, raw: string): string {
   let detail = "";
-  if (payload && typeof payload === "object" && "message" in payload) {
-    const m = (payload as { message: unknown }).message;
-    detail = Array.isArray(m) ? m.join("; ") : String(m ?? "");
+  if (payload && typeof payload === "object") {
+    const p = payload as Record<string, unknown>;
+    if (p.message !== undefined && p.message !== null) {
+      detail = Array.isArray(p.message) ? p.message.join("; ") : String(p.message);
+    } else if (p.error_description || p.error) {
+      detail = [p.error, p.error_description].filter(Boolean).join(": ");
+    }
   }
   if (!detail) detail = raw.slice(0, 300);
   return `HighLevel ${status}: ${detail || "request failed"}`;
 }
 
-async function post<T>(
-  cfg: GhlConfig,
-  path: string,
-  version: string,
-  body: unknown,
+async function request<T>(
+  url: string,
+  headers: Record<string, string>,
+  body: string,
 ): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}${path}`, {
+    res = await fetch(url, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${cfg.token}`,
-        Version: version,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(body),
+      headers: { Accept: "application/json", Version: API_VERSION, ...headers },
+      body,
       cache: "no-store",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -96,19 +117,153 @@ async function post<T>(
   return payload as T;
 }
 
+// ---------- OAuth ----------
+
+export type TokenSet = {
+  accessToken: string;
+  refreshToken: string;
+  // ISO timestamp.
+  expiresAt: string;
+  scope: string | null;
+  userType: string | null;
+  locationId: string | null;
+  companyId: string | null;
+  userId: string | null;
+};
+
+// Where a user is sent to pick a sub-account and approve the connection.
+// `state` is included for CSRF protection; HighLevel's guide does not say it
+// is echoed back, so the callback does not depend on it (see the callback).
+export function buildInstallUrl(
+  app: Pick<GhlAppConfig, "clientId" | "installUrl">,
+  redirectUri: string,
+  state: string,
+): string {
+  if (app.installUrl) {
+    const url = new URL(app.installUrl);
+    if (!url.searchParams.has("state")) url.searchParams.set("state", state);
+    return url.toString();
+  }
+  const url = new URL(DEFAULT_INSTALL_BASE_URL);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("redirect_uri", redirectUri);
+  url.searchParams.set("client_id", app.clientId);
+  url.searchParams.set("scope", GHL_SCOPES.join(" "));
+  url.searchParams.set("state", state);
+  return url.toString();
+}
+
+type RawTokenResponse = {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  scope?: string;
+  userType?: string;
+  locationId?: string;
+  companyId?: string;
+  userId?: string;
+};
+
+async function tokenRequest(
+  app: Pick<GhlAppConfig, "clientId" | "clientSecret">,
+  params: Record<string, string>,
+  apiBaseUrl: string,
+): Promise<TokenSet> {
+  const body = new URLSearchParams({
+    client_id: app.clientId,
+    client_secret: app.clientSecret,
+    // A sub-account token: every call this app makes is sub-account level.
+    user_type: "Location",
+    ...params,
+  });
+  const raw = await request<RawTokenResponse>(
+    `${apiBaseUrl}/oauth/token`,
+    { "Content-Type": "application/x-www-form-urlencoded" },
+    body.toString(),
+  );
+  if (!raw?.access_token || !raw.refresh_token) {
+    throw new GhlError(200, "HighLevel returned no tokens");
+  }
+  // Fall back to a short lifetime if expires_in is missing, so a refresh is
+  // attempted sooner rather than never.
+  const lifetimeSeconds =
+    typeof raw.expires_in === "number" && raw.expires_in > 0 ? raw.expires_in : 3600;
+  return {
+    accessToken: raw.access_token,
+    refreshToken: raw.refresh_token,
+    expiresAt: new Date(Date.now() + lifetimeSeconds * 1000).toISOString(),
+    scope: raw.scope ?? null,
+    userType: raw.userType ?? null,
+    locationId: raw.locationId ?? null,
+    companyId: raw.companyId ?? null,
+    userId: raw.userId ?? null,
+  };
+}
+
+export function exchangeCode(
+  app: Pick<GhlAppConfig, "clientId" | "clientSecret">,
+  code: string,
+  redirectUri: string,
+  apiBaseUrl: string = GHL_API_BASE_URL,
+): Promise<TokenSet> {
+  return tokenRequest(
+    app,
+    { grant_type: "authorization_code", code, redirect_uri: redirectUri },
+    apiBaseUrl,
+  );
+}
+
+// The refresh token is single-use: the returned set carries a NEW refresh
+// token and the one passed in stops working. Callers must store the result.
+export function refreshTokens(
+  app: Pick<GhlAppConfig, "clientId" | "clientSecret">,
+  refreshToken: string,
+  redirectUri: string | null,
+  apiBaseUrl: string = GHL_API_BASE_URL,
+): Promise<TokenSet> {
+  return tokenRequest(
+    app,
+    {
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      ...(redirectUri ? { redirect_uri: redirectUri } : {}),
+    },
+    apiBaseUrl,
+  );
+}
+
+// ---------- CRM calls (made with one user's access token) ----------
+
+export type GhlAuth = {
+  accessToken: string;
+  locationId: string;
+  appBaseUrl: string;
+  apiBaseUrl?: string;
+};
+
+function api<T>(auth: GhlAuth, path: string, body: unknown): Promise<T> {
+  return request<T>(
+    `${auth.apiBaseUrl ?? GHL_API_BASE_URL}${path}`,
+    {
+      Authorization: `Bearer ${auth.accessToken}`,
+      "Content-Type": "application/json",
+    },
+    JSON.stringify(body),
+  );
+}
+
 // Creates the contact, or updates the existing one that matches by email/phone
 // (matching follows the sub-account's duplicate-contact setting). `tags` is
 // deliberately not sent: on upsert it REPLACES the contact's existing tags.
 export async function upsertContact(
-  cfg: GhlConfig,
+  auth: GhlAuth,
   input: { firstName: string; email: string; phone?: string | null },
 ): Promise<{ contactId: string; isNew: boolean }> {
-  const res = await post<{ new?: boolean; contact?: { id?: string } }>(
-    cfg,
+  const res = await api<{ new?: boolean; contact?: { id?: string } }>(
+    auth,
     "/contacts/upsert",
-    CONTACTS_API_VERSION,
     {
-      locationId: cfg.locationId,
+      locationId: auth.locationId,
       firstName: input.firstName,
       email: input.email,
       ...(input.phone ? { phone: input.phone } : {}),
@@ -123,37 +278,35 @@ export async function upsertContact(
 }
 
 export async function addContactNote(
-  cfg: GhlConfig,
+  auth: GhlAuth,
   contactId: string,
   body: string,
 ): Promise<void> {
-  await post(
-    cfg,
-    `/contacts/${encodeURIComponent(contactId)}/notes`,
-    CONTACTS_API_VERSION,
-    { body },
-  );
+  await api(auth, `/contacts/${encodeURIComponent(contactId)}/notes`, { body });
 }
 
 // Queues an outbound SMS to the contact from the sub-account's number.
 // The reference lists a `status` field as required, but that field describes
 // a message's delivery state; it is left out here so an outbound text can
 // never be recorded as already delivered without being sent. If HighLevel
-// rejects the request for it, the error is shown to the admin verbatim.
+// rejects the request for it, the error is shown to the user verbatim.
 export async function sendSms(
-  cfg: GhlConfig,
+  auth: GhlAuth,
   contactId: string,
   message: string,
 ): Promise<{ conversationId?: string; messageId?: string }> {
-  return post(cfg, "/conversations/messages", CONVERSATIONS_API_VERSION, {
+  return api(auth, "/conversations/messages", {
     type: "SMS",
     contactId,
     message,
   });
 }
 
-export function contactUrl(cfg: GhlConfig, contactId: string): string {
-  return `${cfg.appBaseUrl}/v2/location/${cfg.locationId}/contacts/detail/${contactId}`;
+export function contactUrl(
+  where: { appBaseUrl: string; locationId: string },
+  contactId: string,
+): string {
+  return `${where.appBaseUrl}/v2/location/${where.locationId}/contacts/detail/${contactId}`;
 }
 
 export type LeadForSync = {
@@ -179,13 +332,13 @@ function leadNote(lead: LeadForSync): string {
 // caller records the outcome either way. A contact id can come back alongside
 // an error when the contact was saved but the note was not.
 export async function pushLead(
-  cfg: GhlConfig,
+  auth: GhlAuth,
   lead: LeadForSync,
 ): Promise<{ contactId: string | null; error: string | null }> {
   let contactId: string | null = null;
   try {
-    ({ contactId } = await upsertContact(cfg, lead));
-    await addContactNote(cfg, contactId, leadNote(lead));
+    ({ contactId } = await upsertContact(auth, lead));
+    await addContactNote(auth, contactId, leadNote(lead));
     return { contactId, error: null };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown HighLevel error";

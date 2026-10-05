@@ -32,6 +32,9 @@ export function Showcase({
   const complete = streak.totalLogged >= TOTAL_DAYS;
   const earned = new Set<BadgeType>(badges.map((b) => b.badge_type));
   const name = profile.display_name ?? handle;
+  // The stored handle, not the URL's spelling of it: tracked links and the
+  // signup form use it to attribute clicks and leads to this page's owner.
+  const ownerHandle = profile.public_handle ?? handle;
   // Chronological story: Day 1 → latest.
   const ordered = [...entries].sort((a, b) => a.day_number - b.day_number);
 
@@ -87,7 +90,7 @@ export function Showcase({
         ) : (
           <div className="space-y-4">
             {ordered.map((e) => (
-              <PublicEntryCard key={e.id} entry={e} />
+              <PublicEntryCard key={e.id} entry={e} handle={ownerHandle} />
             ))}
           </div>
         )}

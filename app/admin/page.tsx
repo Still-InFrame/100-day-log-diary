@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { requireOwner } from "@/lib/owner";
+import { requireUser } from "@/lib/session";
 import {
   getEntries,
   getInterestStats,
   getLeadCount,
   getLeads,
+  getProfile,
 } from "@/lib/queries";
-import { contactUrl, getGhlConfig } from "@/lib/ghl";
+import { contactUrl, getGhlAppBaseUrl } from "@/lib/ghl";
+import { getConnectionInfo } from "@/lib/ghl-connection";
 import { formatDateTime } from "@/lib/dates";
 import { LeadActions } from "@/components/admin/LeadActions";
 import type { GhlSyncStatus, Lead } from "@/lib/types";
@@ -38,19 +40,22 @@ function textBlockedReason(lead: Lead, connected: boolean): string | null {
   if (!lead.phone) return "no phone number given";
   if (!lead.sms_consent) return "they did not agree to texts";
   if (!connected) return "HighLevel is not connected";
-  if (!lead.ghl_contact_id) return "not in HighLevel yet — sync first";
+  if (!lead.ghl_contact_id) return "not in HighLevel yet — send them there first";
   return null;
 }
 
 export default async function AdminInterestPage() {
-  const owner = await requireOwner();
-  const [leads, total, stats, entries] = await Promise.all([
+  const user = await requireUser();
+  const [leads, total, stats, entries, profile, connection] = await Promise.all([
     getLeads(LEADS_SHOWN),
     getLeadCount(),
     getInterestStats(),
-    getEntries(owner.user.id),
+    getEntries(user.id),
+    getProfile(user.id),
+    getConnectionInfo(user.id),
   ]);
-  const cfg = getGhlConfig();
+  const connected = Boolean(connection && !connection.needsReconnect);
+  const appBaseUrl = getGhlAppBaseUrl();
 
   const appNames = new Map(entries.map((e) => [e.day_number, e.app_name]));
   const ranked = [...stats].sort(
@@ -61,15 +66,35 @@ export default async function AdminInterestPage() {
 
   return (
     <div className="space-y-8">
-      {!cfg && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
-          HighLevel is not connected. Signups are being saved here but not
-          sent to HighLevel, and texting is off.{" "}
-          <Link href="/admin/settings" className="font-medium underline">
-            Connect it in Settings
+      {!profile?.public_handle && (
+        <Notice>
+          Your page is not public yet, so nobody can sign up or click.{" "}
+          <Link href="/profile" className="font-medium underline">
+            Publish it from your Profile
           </Link>
           .
-        </div>
+        </Notice>
+      )}
+      {connection?.needsReconnect ? (
+        <Notice>
+          Your HighLevel connection has expired. New signups are saved here
+          but not sent to HighLevel.{" "}
+          <Link href="/admin/settings" className="font-medium underline">
+            Reconnect in Settings
+          </Link>
+          .
+        </Notice>
+      ) : (
+        !connection && (
+          <Notice>
+            HighLevel is not connected. Signups are saved here but not sent to
+            HighLevel, and texting is off.{" "}
+            <Link href="/admin/settings" className="font-medium underline">
+              Connect it in Settings
+            </Link>
+            .
+          </Notice>
+        )
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -84,7 +109,7 @@ export default async function AdminInterestPage() {
         {ranked.length === 0 ? (
           <Empty>
             No signups yet. They appear here when someone uses &ldquo;Notify me
-            when this launches&rdquo; on the public page.
+            when this launches&rdquo; on your public page.
           </Empty>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
@@ -197,17 +222,20 @@ export default async function AdminInterestPage() {
                     firstName={lead.first_name}
                     appName={lead.app_name}
                     contactLink={
-                      cfg && lead.ghl_contact_id
-                        ? contactUrl(cfg, lead.ghl_contact_id)
+                      connection && lead.ghl_contact_id
+                        ? contactUrl(
+                            { appBaseUrl, locationId: connection.locationId },
+                            lead.ghl_contact_id,
+                          )
                         : null
                     }
-                    canSync={Boolean(cfg) && lead.ghl_sync_status !== "synced"}
+                    canSync={connected && lead.ghl_sync_status !== "synced"}
                     syncLabel={
                       lead.ghl_sync_status === "failed"
                         ? "Retry sync"
                         : "Send to HighLevel"
                     }
-                    textBlockedReason={textBlockedReason(lead, Boolean(cfg))}
+                    textBlockedReason={textBlockedReason(lead, connected)}
                   />
                 </article>
               );
@@ -215,6 +243,14 @@ export default async function AdminInterestPage() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function Notice({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+      {children}
     </div>
   );
 }

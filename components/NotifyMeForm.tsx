@@ -10,9 +10,12 @@ const inputClass =
 // Per-app waitlist signup shown on each public card. Collapsed to a single
 // button until someone asks for it, so 100 cards do not show 100 forms.
 export function NotifyMeForm({
+  handle,
   dayNumber,
   appName,
 }: {
+  // The page owner's handle; the signup is saved as their lead.
+  handle: string;
   dayNumber: number;
   appName: string;
 }) {
@@ -34,6 +37,7 @@ export function NotifyMeForm({
     setError(null);
     startTransition(async () => {
       const result = await submitInterest({
+        handle,
         dayNumber,
         firstName,
         email,

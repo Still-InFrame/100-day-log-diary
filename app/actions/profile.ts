@@ -19,10 +19,11 @@ export async function setPublicHandle(raw: string | null): Promise<HandleResult>
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not authenticated" };
 
-  // The account holding OWNER_HANDLE is the site owner: the public front door
-  // shows its projects and the admin (leads, texting) is gated on it. If the
-  // handle were released, any other account could claim it and become the
-  // owner, so it cannot be changed or cleared from here.
+  // The account holding OWNER_HANDLE is the site owner: the apex front door
+  // shows that account's projects. If the handle were released, the main
+  // domain would have nothing to show, and any other account could claim the
+  // handle and take over the front door. So it cannot be changed or cleared
+  // from here.
   const requested = raw === null ? "" : raw.trim().toLowerCase();
   const { data: current } = await supabase
     .from("profiles")
@@ -33,7 +34,7 @@ export async function setPublicHandle(raw: string | null): Promise<HandleResult>
     return {
       ok: false,
       error:
-        "This handle runs the public site and admin access, so it can't be changed or removed here.",
+        "This handle is the site's front page, so it can't be changed or removed here.",
     };
   }
 

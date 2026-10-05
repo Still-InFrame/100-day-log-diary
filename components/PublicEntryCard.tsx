@@ -3,10 +3,17 @@ import type { Entry } from "@/lib/types";
 import { formatLongDate } from "@/lib/dates";
 import { NotifyMeForm } from "@/components/NotifyMeForm";
 
-// Read-only entry rendering for the public share page. Shows every field
-// (the owner opted into full transparency). Deliberately links nowhere into
-// the authenticated app.
-export function PublicEntryCard({ entry }: { entry: Entry }) {
+// Read-only entry rendering for a public page. Shows every field (the owner
+// opted into full transparency). Deliberately links nowhere into the
+// authenticated app. `handle` is the page owner's: clicks and signups from
+// this card are recorded against that user.
+export function PublicEntryCard({
+  entry,
+  handle,
+}: {
+  entry: Entry;
+  handle: string;
+}) {
   return (
     <article className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex items-baseline justify-between gap-3">
@@ -45,7 +52,7 @@ export function PublicEntryCard({ entry }: { entry: Entry }) {
             counted as interest. */}
         {entry.live_url && (
           <a
-            href={`/go/${entry.day_number}?t=live`}
+            href={`/go/${handle}/${entry.day_number}?t=live`}
             target="_blank"
             rel="noopener nofollow"
             className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
@@ -55,7 +62,7 @@ export function PublicEntryCard({ entry }: { entry: Entry }) {
         )}
         {entry.repo_url && (
           <a
-            href={`/go/${entry.day_number}?t=code`}
+            href={`/go/${handle}/${entry.day_number}?t=code`}
             target="_blank"
             rel="noopener nofollow"
             className="text-indigo-500 hover:underline"
@@ -65,7 +72,11 @@ export function PublicEntryCard({ entry }: { entry: Entry }) {
         )}
       </div>
 
-      <NotifyMeForm dayNumber={entry.day_number} appName={entry.app_name} />
+      <NotifyMeForm
+        handle={handle}
+        dayNumber={entry.day_number}
+        appName={entry.app_name}
+      />
 
       {entry.screenshot_url && (
         <div className="mt-4 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">

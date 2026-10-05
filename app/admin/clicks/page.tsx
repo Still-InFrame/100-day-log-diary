@@ -1,13 +1,13 @@
-import { requireOwner } from "@/lib/owner";
+import { requireUser } from "@/lib/session";
 import { getClickStats, getEntries, getInterestStats } from "@/lib/queries";
 import { formatDateTime } from "@/lib/dates";
 
 export default async function AdminClicksPage() {
-  const owner = await requireOwner();
+  const user = await requireUser();
   const [clicks, interest, entries] = await Promise.all([
     getClickStats(),
     getInterestStats(),
-    getEntries(owner.user.id),
+    getEntries(user.id),
   ]);
 
   const appNames = new Map(entries.map((e) => [e.day_number, e.app_name]));
@@ -38,9 +38,9 @@ export default async function AdminClicksPage() {
         <h2 className="mb-1 text-lg font-semibold">Clicks by app</h2>
         <p className="mb-3 text-sm text-zinc-500">
           Counts clicks on &ldquo;Open app&rdquo; and &ldquo;View code&rdquo;
-          from the public page. Known crawlers are left out, but some automated
-          traffic can still slip through, and your own clicks on the public
-          page count too.
+          from your public page. Known crawlers are left out, but some
+          automated traffic can still slip through, and your own clicks on
+          your public page count too.
         </p>
         {ranked.length === 0 ? (
           <div className="rounded-lg border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">

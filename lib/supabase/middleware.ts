@@ -53,6 +53,9 @@ export async function updateSession(request: NextRequest) {
   ) {
     const redirect = url.clone();
     redirect.pathname = "/login";
+    // Drop the query string: nothing on /login reads it, and a private URL's
+    // parameters (such as an OAuth code) should not be carried along.
+    redirect.search = "";
     return NextResponse.redirect(redirect);
   }
 

@@ -4,19 +4,26 @@ import { after } from "next/server";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getEntryByDay, getLeadById, getProfileByHandle } from "@/lib/queries";
-import { OWNER_HANDLE, TOTAL_DAYS, smsConsentText } from "@/lib/constants";
+import {
+  getCurrentUser,
+  getEntryByDay,
+  getLeadById,
+  getProfile,
+  getProfileByHandle,
+} from "@/lib/queries";
+import { TOTAL_DAYS, smsConsentText } from "@/lib/constants";
 import {
   addContactNote,
   contactUrl,
-  getGhlConfig,
   pushLead,
   sendSms,
   upsertContact,
 } from "@/lib/ghl";
-import { getOwner } from "@/lib/owner";
+import { deleteConnection, getGhlAuthFor } from "@/lib/ghl-connection";
 
 export type InterestInput = {
+  // Whose public page the form was submitted on. The lead belongs to them.
+  handle: string;
   dayNumber: number;
   firstName: string;
   email: string;
@@ -35,9 +42,8 @@ export type AdminResult =
   | { ok: false; error: string };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
 const MAX_TEXT_LENGTH = 1000;
-const NOT_CONFIGURED =
-  "HighLevel is not connected yet. Add the token and location ID on the Settings tab, then redeploy.";
 
 // Returns "+<digits>" or null when the input does not look like a phone
 // number. A bare 10-digit number is treated as US/Canada, since that is where
@@ -60,8 +66,14 @@ export async function submitInterest(
   // Report success so a bot learns nothing, but store and send nothing.
   if (input.website?.trim()) return { ok: true };
 
+  const handle = (input.handle ?? "").trim().toLowerCase();
   const dayNumber = Number(input.dayNumber);
-  if (!Number.isInteger(dayNumber) || dayNumber < 1 || dayNumber > TOTAL_DAYS) {
+  if (
+    !HANDLE_RE.test(handle) ||
+    !Number.isInteger(dayNumber) ||
+    dayNumber < 1 ||
+    dayNumber > TOTAL_DAYS
+  ) {
     return { ok: false, error: "That app could not be found." };
   }
 
@@ -90,11 +102,12 @@ export async function submitInterest(
   // Consent only means something when there is a number to text.
   const smsConsent = Boolean(input.smsConsent) && phone !== null;
 
-  const profile = await getProfileByHandle(OWNER_HANDLE);
+  const profile = await getProfileByHandle(handle);
   const entry = profile ? await getEntryByDay(profile.user_id, dayNumber) : null;
   if (!profile || !entry) {
     return { ok: false, error: "That app could not be found." };
   }
+  const pageOwnerId = profile.user_id;
 
   const requestHeaders = await headers();
   // The id is generated here because the anonymous role may insert but not
@@ -105,7 +118,7 @@ export async function submitInterest(
 
   const { error } = await supabase.from("app_interest").insert({
     id,
-    owner_user_id: profile.user_id,
+    owner_user_id: pageOwnerId,
     day_number: dayNumber,
     app_name: entry.app_name.slice(0, 200),
     first_name: firstName,
@@ -129,22 +142,40 @@ export async function submitInterest(
     };
   }
 
-  // The lead is saved. Push it to HighLevel after the response is sent so the
-  // visitor never waits on a third-party API; the outcome is written back and
-  // shown in the admin, where a failed push can be retried.
+  // The lead is saved. Push it to the page owner's HighLevel after the
+  // response is sent so the visitor never waits on a third-party API; the
+  // outcome is written back and shown in the owner's admin, where a failed
+  // push can be retried.
   after(async () => {
+    const record = (
+      status: "synced" | "failed" | "skipped",
+      contactId: string | null,
+      message: string | null,
+    ) =>
+      supabase.rpc("record_interest_sync", {
+        p_id: id,
+        p_status: status,
+        p_contact_id: contactId,
+        p_error: message,
+      });
+
     try {
-      const cfg = getGhlConfig();
-      if (!cfg) {
-        await supabase.rpc("record_interest_sync", {
-          p_id: id,
-          p_status: "skipped",
-          p_contact_id: null,
-          p_error: "HighLevel was not connected when this lead signed up",
-        });
+      const auth = await getGhlAuthFor(pageOwnerId);
+      if (!auth.ok) {
+        // Not connected is a normal state, not a failure. A broken or busy
+        // connection is a failure the owner can fix and retry.
+        const neverTried =
+          auth.reason === "not_available" || auth.reason === "not_connected";
+        await record(
+          neverTried ? "skipped" : "failed",
+          null,
+          neverTried
+            ? "HighLevel was not connected when this lead signed up"
+            : auth.message,
+        );
         return;
       }
-      const result = await pushLead(cfg, {
+      const result = await pushLead(auth.auth, {
         firstName,
         email,
         phone,
@@ -153,12 +184,11 @@ export async function submitInterest(
         smsConsent,
         createdAt,
       });
-      await supabase.rpc("record_interest_sync", {
-        p_id: id,
-        p_status: result.error ? "failed" : "synced",
-        p_contact_id: result.contactId,
-        p_error: result.error,
-      });
+      await record(
+        result.error ? "failed" : "synced",
+        result.contactId,
+        result.error,
+      );
     } catch (e) {
       console.error("submitInterest: HighLevel sync crashed", e);
     }
@@ -167,18 +197,22 @@ export async function submitInterest(
   return { ok: true };
 }
 
-// ---------- owner-only actions ----------
+// ---------- actions for the signed-in user's own leads ----------
+// Each one acts only on the caller's own data: leads are read through RLS
+// (owner_user_id = auth.uid()) and HighLevel is called with the caller's own
+// connection.
 
 export async function retryLeadSync(leadId: string): Promise<AdminResult> {
-  const owner = await getOwner();
-  if (!owner) return { ok: false, error: "Not authorized." };
-  const cfg = getGhlConfig();
-  if (!cfg) return { ok: false, error: NOT_CONFIGURED };
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Please sign in again." };
 
   const lead = await getLeadById(leadId);
   if (!lead) return { ok: false, error: "Lead not found." };
 
-  const result = await pushLead(cfg, {
+  const auth = await getGhlAuthFor(user.id);
+  if (!auth.ok) return { ok: false, error: `${auth.message}.` };
+
+  const result = await pushLead(auth.auth, {
     firstName: lead.first_name,
     email: lead.email,
     phone: lead.phone,
@@ -214,10 +248,8 @@ export async function sendLeadText(
   leadId: string,
   message: string,
 ): Promise<AdminResult> {
-  const owner = await getOwner();
-  if (!owner) return { ok: false, error: "Not authorized." };
-  const cfg = getGhlConfig();
-  if (!cfg) return { ok: false, error: NOT_CONFIGURED };
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Please sign in again." };
 
   const text = (message ?? "").trim();
   if (!text) return { ok: false, error: "Write a message first." };
@@ -235,11 +267,14 @@ export async function sendLeadText(
     return { ok: false, error: "This lead did not agree to receive texts." };
   }
   if (!lead.ghl_contact_id) {
-    return { ok: false, error: "Sync this lead to HighLevel first." };
+    return { ok: false, error: "Send this lead to HighLevel first." };
   }
 
+  const auth = await getGhlAuthFor(user.id);
+  if (!auth.ok) return { ok: false, error: `${auth.message}.` };
+
   try {
-    await sendSms(cfg, lead.ghl_contact_id, text);
+    await sendSms(auth.auth, lead.ghl_contact_id, text);
   } catch (e) {
     return {
       ok: false,
@@ -258,37 +293,39 @@ export async function sendLeadText(
   return {
     ok: true,
     message: "Handed to HighLevel for sending.",
-    url: contactUrl(cfg, lead.ghl_contact_id),
+    url: contactUrl(auth.auth, lead.ghl_contact_id),
   };
 }
 
-// Proves the token, location and write permission by saving the owner's own
-// email as a contact with a note, so no stranger's record is created.
+// Proves the connection and write permission by saving the caller's own email
+// as a contact with a note, so no stranger's record is created.
 export async function sendTestContact(): Promise<AdminResult> {
-  const owner = await getOwner();
-  if (!owner) return { ok: false, error: "Not authorized." };
-  const cfg = getGhlConfig();
-  if (!cfg) return { ok: false, error: NOT_CONFIGURED };
-  if (!owner.user.email) {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Please sign in again." };
+  if (!user.email) {
     return { ok: false, error: "Your account has no email to test with." };
   }
 
+  const auth = await getGhlAuthFor(user.id);
+  if (!auth.ok) return { ok: false, error: `${auth.message}.` };
+
+  const profile = await getProfile(user.id);
   try {
-    const { contactId, isNew } = await upsertContact(cfg, {
-      firstName: owner.displayName?.split(" ")[0] || "Test",
-      email: owner.user.email,
+    const { contactId, isNew } = await upsertContact(auth.auth, {
+      firstName: profile?.display_name?.split(" ")[0] || "Test",
+      email: user.email,
     });
     await addContactNote(
-      cfg,
+      auth.auth,
       contactId,
       `Connection test from the 100 Day Challenge admin on ${new Date().toISOString().slice(0, 10)}. Safe to delete.`,
     );
     return {
       ok: true,
       message: isNew
-        ? "Connected. A test contact with your email was created, with a note."
-        : "Connected. A note was added to your existing contact.",
-      url: contactUrl(cfg, contactId),
+        ? "It works. A test contact with your email was created, with a note."
+        : "It works. A note was added to your existing contact.",
+      url: contactUrl(auth.auth, contactId),
     };
   } catch (e) {
     return {
@@ -296,4 +333,15 @@ export async function sendTestContact(): Promise<AdminResult> {
       error: e instanceof Error ? e.message : "HighLevel rejected the request.",
     };
   }
+}
+
+// Removes the stored tokens for the caller. It does not uninstall the app
+// inside HighLevel; that is done from HighLevel's own settings.
+export async function disconnectHighLevel(): Promise<AdminResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Please sign in again." };
+  const { error } = await deleteConnection(user.id);
+  if (error) return { ok: false, error };
+  revalidatePath("/admin");
+  return { ok: true, message: "Disconnected." };
 }

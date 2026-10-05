@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { isOwnerUser } from "@/lib/owner";
 import { SignOutButton } from "./SignOutButton";
 
 export async function Nav() {
@@ -8,8 +7,6 @@ export async function Nav() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  // The link is a convenience; /admin itself re-checks ownership.
-  const isOwner = user ? await isOwnerUser(user.id) : false;
 
   return (
     <header className="border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
@@ -32,11 +29,9 @@ export async function Nav() {
             <Link href="/profile" className="hover:underline">
               Profile
             </Link>
-            {isOwner && (
-              <Link href="/admin" className="hover:underline">
-                Admin
-              </Link>
-            )}
+            <Link href="/admin" className="hover:underline">
+              Admin
+            </Link>
             <SignOutButton />
           </nav>
         ) : (

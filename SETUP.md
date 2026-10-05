@@ -24,11 +24,11 @@ In your Supabase dashboard:
 1. Go to **SQL Editor** → **New query**.
 2. Open `supabase/migrations/0001_initial.sql` from this repo, copy the entire contents, paste into the SQL editor.
 3. Click **Run**.
-4. Repeat for every later file in `supabase/migrations/`, in number order (`0002_…`, then `0003_…`).
+4. Repeat for every later file in `supabase/migrations/`, in number order (`0002_…`, `0003_…`, `0004_…`).
 
-You should see "Success. No rows returned." each time. `0001` creates the `profiles`, `entries`, and `badges` tables, all Row Level Security policies, the screenshots storage bucket, and the auto-profile-creation trigger. `0002` adds the live-app link and click tracking. `0003` adds the "Notify me" leads table and the admin stats.
+You should see "Success. No rows returned." each time. `0001` creates the `profiles`, `entries`, and `badges` tables, all Row Level Security policies, the screenshots storage bucket, and the auto-profile-creation trigger. `0002` adds the live-app link and click tracking. `0003` adds the "Notify me" leads table and the admin stats. `0004` adds the table that holds each user's HighLevel connection.
 
-Lead sync to HighLevel is optional and off until two server-side settings are added; the owner's Admin → Settings page lists them.
+Connecting HighLevel is optional. It stays off until three server-side settings are added (a HighLevel Marketplace app's client ID and secret, and the Supabase secret key); the site owner's Admin → Settings page lists the steps. Without it, signups are still saved and shown in each user's admin.
 
 ## 3. Set up Google OAuth (~5 min)
 
