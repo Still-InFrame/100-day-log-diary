@@ -76,3 +76,47 @@
     --viz-focus: #1d3557;
   }
 }
+
+/* The "Notify me" signup dialog (components/NotifyMeForm.tsx). It rises as a
+   sheet on phones and fades in as a box from the sm breakpoint up. */
+.signup-dialog[open] {
+  animation: signup-sheet-in 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+.signup-dialog::backdrop {
+  animation: signup-backdrop-in 220ms ease-out;
+}
+@media (min-width: 40rem) {
+  .signup-dialog[open] {
+    animation-name: signup-box-in;
+  }
+}
+@keyframes signup-sheet-in {
+  from {
+    transform: translateY(2rem);
+    opacity: 0;
+  }
+}
+@keyframes signup-box-in {
+  from {
+    transform: scale(0.97);
+    opacity: 0;
+  }
+}
+@keyframes signup-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .signup-dialog[open],
+  .signup-dialog::backdrop {
+    animation: none;
+  }
+}
+/* The page behind an open dialog should not scroll. `stable` keeps the
+   scrollbar's space reserved so the page does not shift sideways when the
+   bar disappears. */
+html:has(.signup-dialog[open]) {
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}

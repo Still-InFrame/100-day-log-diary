@@ -13,6 +13,8 @@ import { PublicEntryCard } from "@/components/PublicEntryCard";
 import { PopularApps } from "@/components/PopularApps";
 import { ViewTracker } from "@/components/ViewTracker";
 import { MetaPixel } from "@/components/MetaPixel";
+import Link from "next/link";
+import { PRIVACY_PATH } from "@/lib/legal";
 import type { Badge, BadgeType, Entry, Profile } from "@/lib/types";
 
 // The public, read-only view of one person's challenge. Rendered at "/" for
@@ -127,7 +129,12 @@ export async function Showcase({
           // the other cards in its row.
           <div className="grid items-start gap-4 sm:grid-cols-2 md:grid-cols-3">
             {shuffled.map((e) => (
-              <PublicEntryCard key={e.id} entry={e} handle={ownerHandle} />
+              <PublicEntryCard
+                key={e.id}
+                entry={e}
+                handle={ownerHandle}
+                metaAds={Boolean(profile.meta_pixel_id)}
+              />
             ))}
           </div>
         )}
@@ -139,7 +146,10 @@ export async function Showcase({
       )}
 
       <footer className="border-t border-zinc-200 pt-6 text-center text-xs text-zinc-400 dark:border-zinc-800">
-        Public progress page · 100 Day Log Diary
+        Public progress page · 100 Day Log Diary ·{" "}
+        <Link href={PRIVACY_PATH} className="underline hover:text-zinc-600">
+          Privacy
+        </Link>
       </footer>
     </div>
   );

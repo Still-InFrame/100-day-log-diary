@@ -44,6 +44,9 @@ export async function updateSession(request: NextRequest) {
   const isRobots = url.pathname === "/robots.txt";
   // Anonymous visitors' browsers post the app cards they saw here.
   const isViewBeacon = url.pathname === "/api/views";
+  // The privacy policy is linked from every public page and signup form, and
+  // is what a text-messaging or ad reviewer will open without an account.
+  const isPrivacy = url.pathname === "/privacy";
 
   if (
     !user &&
@@ -52,7 +55,8 @@ export async function updateSession(request: NextRequest) {
     !isPublicHome &&
     !isTrackedRedirect &&
     !isRobots &&
-    !isViewBeacon
+    !isViewBeacon &&
+    !isPrivacy
   ) {
     const redirect = url.clone();
     redirect.pathname = "/login";

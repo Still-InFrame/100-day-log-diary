@@ -18,9 +18,13 @@ import { NotifyMeForm } from "@/components/NotifyMeForm";
 export function PublicEntryCard({
   entry,
   handle,
+  metaAds,
 }: {
   entry: Entry;
   handle: string;
+  // Whether this page loads the owner's Meta Pixel; the signup form's small
+  // print depends on it.
+  metaAds: boolean;
 }) {
   // Outbound links go through /go so each click is recorded before the
   // visitor is redirected. noopener (not noreferrer) keeps the Referer header
@@ -28,7 +32,11 @@ export function PublicEntryCard({
   // search crawlers from following the link and being counted as interest.
   const liveHref = `/go/${handle}/${entry.day_number}?t=live`;
   const codeHref = `/go/${handle}/${entry.day_number}?t=code`;
-  const primaryHref = entry.live_url ? liveHref : entry.repo_url ? codeHref : null;
+  const primaryHref = entry.live_url
+    ? liveHref
+    : entry.repo_url
+      ? codeHref
+      : null;
   const primaryLabel = entry.live_url ? "Open app →" : "View code →";
 
   const picture = entry.screenshot_url ? (
@@ -80,7 +88,9 @@ export function PublicEntryCard({
             <span className="font-medium uppercase tracking-wide text-indigo-500">
               Day {entry.day_number}
             </span>
-            <span className="text-zinc-500">{formatMediumDate(entry.date)}</span>
+            <span className="text-zinc-500">
+              {formatMediumDate(entry.date)}
+            </span>
           </div>
           <h3 className="mt-1 line-clamp-2 font-semibold leading-snug">
             {entry.app_name}
@@ -92,7 +102,8 @@ export function PublicEntryCard({
       </div>
 
       {/* One wrapping row: the buttons, then "Details" pushed to the right.
-          The signup form and the opened details each take a full line below. */}
+          The signup form opens over the page (see NotifyMeForm), so only the
+          opened details ever add a line here. */}
       <div className="flex flex-wrap items-center gap-2 px-3 pb-3 sm:px-4 sm:pb-4 sm:pt-3">
         {primaryHref && (
           <a
@@ -108,67 +119,70 @@ export function PublicEntryCard({
           handle={handle}
           dayNumber={entry.day_number}
           appName={entry.app_name}
+          metaAds={metaAds}
         />
 
-      <details className="group ml-auto open:ml-0 open:basis-full">
-        <summary className="cursor-pointer list-none py-1.5 text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 [&::-webkit-details-marker]:hidden">
-          <span className="group-open:hidden">Details ▾</span>
-          <span className="hidden group-open:inline">Hide details ▴</span>
-        </summary>
+        <details className="group ml-auto open:ml-0 open:basis-full">
+          <summary className="cursor-pointer list-none py-1.5 text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 [&::-webkit-details-marker]:hidden">
+            <span className="group-open:hidden">Details ▾</span>
+            <span className="hidden group-open:inline">Hide details ▴</span>
+          </summary>
 
-        <div className="mt-2 space-y-3 text-sm">
-          <p className="text-zinc-700 dark:text-zinc-300">{entry.description}</p>
+          <div className="mt-2 space-y-3 text-sm">
+            <p className="text-zinc-700 dark:text-zinc-300">
+              {entry.description}
+            </p>
 
-          <div className="flex flex-wrap gap-1">
-            {entry.tech_stack.map((t) => (
-              <span
-                key={t}
-                className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-              >
-                {t}
-              </span>
-            ))}
-          </div>
+            <div className="flex flex-wrap gap-1">
+              {entry.tech_stack.map((t) => (
+                <span
+                  key={t}
+                  className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
-            <span>{entry.time_spent_minutes} min to build</span>
-            {/* Shown here only when the picture and button already go to the
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
+              <span>{entry.time_spent_minutes} min to build</span>
+              {/* Shown here only when the picture and button already go to the
                 live app; otherwise the button above is this same link. */}
-            {entry.live_url && entry.repo_url && (
-              <a
-                href={codeHref}
-                target="_blank"
-                rel="noopener nofollow"
-                className="text-indigo-500 hover:underline"
-              >
-                View code →
-              </a>
+              {entry.live_url && entry.repo_url && (
+                <a
+                  href={codeHref}
+                  target="_blank"
+                  rel="noopener nofollow"
+                  className="text-indigo-500 hover:underline"
+                >
+                  View code →
+                </a>
+              )}
+            </div>
+
+            {entry.learnings && (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  What I learned
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
+                  {entry.learnings}
+                </p>
+              </div>
+            )}
+
+            {entry.challenges && (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  Challenges &amp; blockers
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
+                  {entry.challenges}
+                </p>
+              </div>
             )}
           </div>
-
-          {entry.learnings && (
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                What I learned
-              </div>
-              <p className="mt-1 whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
-                {entry.learnings}
-              </p>
-            </div>
-          )}
-
-          {entry.challenges && (
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Challenges &amp; blockers
-              </div>
-              <p className="mt-1 whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
-                {entry.challenges}
-              </p>
-            </div>
-          )}
-        </div>
-      </details>
+        </details>
       </div>
     </article>
   );

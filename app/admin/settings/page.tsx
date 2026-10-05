@@ -160,10 +160,17 @@ export default async function AdminSettingsPage() {
         <MetaPixelSettings current={pixelId} />
         <p className="mt-3 text-xs text-zinc-500">
           Find the ID in Meta Events Manager under Data sources. Turning this on
-          shares what visitors do on your public page with Meta, so say so in
-          your privacy notice. The pixel is not loaded for you while you are
-          signed in, or for visitors whose browser asks sites not to share their
-          data (Global Privacy Control).
+          shares what visitors do on your public page with Meta. If
+          &ldquo;Automatic advanced matching&rdquo; is on in your pixel&rsquo;s
+          settings, Meta also takes a scrambled copy of the name, email and
+          phone number typed into your signup forms; the form and the
+          site&rsquo;s{" "}
+          <a href="/privacy" className="underline">
+            privacy policy
+          </a>{" "}
+          tell visitors so. The pixel is not loaded for you while you are signed
+          in, or for visitors whose browser asks sites not to share their data
+          (Global Privacy Control).
         </p>
       </section>
 

@@ -59,6 +59,10 @@ function loadFbq(): Fbq {
 export function MetaPixel({ pixelId }: { pixelId: string }) {
   useEffect(() => {
     if (!isPixelId(pixelId)) return;
+    // Never from a development build. Local development reads the real
+    // database, so the owner's real pixel ID is on the page, and testing
+    // there would send made-up visits (from "localhost") into their ad data.
+    if (process.env.NODE_ENV !== "production") return;
     const optedOut =
       (navigator as Navigator & { globalPrivacyControl?: boolean })
         .globalPrivacyControl === true;

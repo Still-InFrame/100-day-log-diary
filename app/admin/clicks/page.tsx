@@ -219,8 +219,8 @@ export default async function AdminClicksPage({
       ) : (
         <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
           The counts for these dates could not be loaded, so the table below
-          shows zeros. Each app&rsquo;s status is still right. Reload the page
-          to try again.
+          shows zeros. Each app’s status is still right. Reload the page to try
+          again.
         </div>
       )}
 
@@ -232,8 +232,7 @@ export default async function AdminClicksPage({
           unique views. An app is ranked once it has {POPULAR_MIN_CLICKERS}{" "}
           unique clicks and {POPULAR_MIN_VIEWERS} unique views; ranked apps are
           ordered by click rate, then repeat clicks, then signups, and the top{" "}
-          {POPULAR_COUNT} appear as &ldquo;Most popular&rdquo; on your public
-          page.
+          {POPULAR_COUNT} appear as “Most popular” on your public page.
         </p>
         <p className="mb-4 text-xs text-zinc-500">
           A person is one browser, so the same person on a phone and a laptop
