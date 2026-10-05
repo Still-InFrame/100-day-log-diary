@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileByHandle } from "@/lib/queries";
 import { looksAutomated } from "@/lib/bots";
+import { recordingEnabled } from "@/lib/recording";
 import { TOTAL_DAYS } from "@/lib/constants";
 
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
@@ -18,6 +19,7 @@ const MAX_BODY_CHARS = 2000;
 export async function POST(req: NextRequest) {
   const done = () => new NextResponse(null, { status: 204 });
 
+  if (!recordingEnabled()) return done();
   if (looksAutomated(req.headers.get("user-agent"))) return done();
 
   let payload: { handle?: unknown; days?: unknown };

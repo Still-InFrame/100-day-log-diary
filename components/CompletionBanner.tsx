@@ -32,12 +32,17 @@ export function CompletionBanner({
   startDate,
   celebrate = false,
   name,
+  compact = false,
 }: {
   startDate: string;
   celebrate?: boolean;
   // Pass on public pages so the copy names the builder in the third person
   // instead of addressing the visitor as "You".
   name?: string;
+  // The slim version for public pages, where the apps are the point: one
+  // sentence carries what the progress bar, stat cards and pills would
+  // otherwise repeat, so the first apps fit on the first screen.
+  compact?: boolean;
 }) {
   const fired = useRef(false);
 
@@ -61,6 +66,31 @@ export function CompletionBanner({
     fired.current = true;
     fireConfetti();
   }, [celebrate]);
+
+  if (compact) {
+    return (
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 px-5 py-4 text-white shadow-lg ring-1 ring-white/10">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-3 -top-4 select-none text-6xl opacity-20"
+        >
+          🎉
+        </div>
+        <div className="relative">
+          <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide backdrop-blur">
+            🏆 Challenge complete
+          </div>
+          <h2 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">
+            {TOTAL_DAYS} days. {TOTAL_DAYS} apps. Done.
+          </h2>
+          <p className="mt-1 text-sm text-white/85">
+            {name ?? "You"} shipped one app every day from {startLabel} to{" "}
+            {endLabel}, without missing one.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-8 text-white shadow-lg ring-1 ring-white/10">

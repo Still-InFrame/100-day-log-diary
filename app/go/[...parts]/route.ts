@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEntryByDay, getProfileByHandle } from "@/lib/queries";
 import { OWNER_HANDLE, TOTAL_DAYS } from "@/lib/constants";
 import { looksAutomated } from "@/lib/bots";
+import { recordingEnabled } from "@/lib/recording";
 
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
 
@@ -70,7 +71,7 @@ export async function GET(
   const source = req.nextUrl.searchParams.get("p") === "1" ? "popular" : "list";
 
   // Best-effort telemetry — a logging failure must never block the redirect.
-  if (!looksAutomated(userAgent)) {
+  if (recordingEnabled() && !looksAutomated(userAgent)) {
     try {
       const supabase = await createClient();
       const {

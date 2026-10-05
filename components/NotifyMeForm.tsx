@@ -9,6 +9,9 @@ const inputClass =
 
 // Per-app waitlist signup shown on each public card. Collapsed to a single
 // button until someone asks for it, so 100 cards do not show 100 forms.
+// It renders inside the card's row of actions (a wrapping flex row): the
+// button sits beside "Open app", and the form or the confirmation takes the
+// full width below (basis-full).
 export function NotifyMeForm({
   handle,
   dayNumber,
@@ -55,7 +58,7 @@ export function NotifyMeForm({
 
   if (done) {
     return (
-      <p className="mt-4 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+      <p className="basis-full rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
         {done === "already"
           ? `You're already on the list for ${appName}.`
           : `You're on the list for ${appName}.`}
@@ -68,9 +71,10 @@ export function NotifyMeForm({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-4 rounded-md border border-indigo-300 px-3 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 dark:border-indigo-700 dark:text-indigo-300 dark:hover:bg-indigo-950"
+        title={`Notify me when ${appName} launches`}
+        className="rounded-md border border-indigo-300 px-3 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 dark:border-indigo-700 dark:text-indigo-300 dark:hover:bg-indigo-950"
       >
-        Notify me when this launches
+        Notify me
       </button>
     );
   }
@@ -80,13 +84,14 @@ export function NotifyMeForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="mt-4 space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950"
+      className="basis-full space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950"
     >
       <div className="text-sm font-medium">
         Get notified when {appName} launches
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      {/* One column: the form opens inside a narrow card. */}
+      <div className="grid gap-3">
         <div>
           <label
             htmlFor={`${formId}-name`}

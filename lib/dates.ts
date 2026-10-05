@@ -29,6 +29,10 @@ export function formatShortDate(date: string): string {
   return format(parseISO(date), "MMM d");
 }
 
+export function formatMediumDate(date: string): string {
+  return format(parseISO(date), "MMM d, yyyy");
+}
+
 // Formats a full timestamp (e.g. a lead's created_at) in the app's timezone.
 // Uses Intl with an explicit zone because server rendering runs in UTC.
 export function formatDateTime(

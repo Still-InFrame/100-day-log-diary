@@ -8,7 +8,7 @@ import { seededShuffle, visitorSeed } from "@/lib/shuffle";
 import { ProgressBar } from "@/components/ProgressBar";
 import { CompletionBanner } from "@/components/CompletionBanner";
 import { StreakBanner } from "@/components/StreakBanner";
-import { TrophyCase } from "@/components/TrophyCase";
+import { BadgeStrip } from "@/components/BadgeStrip";
 import { PublicEntryCard } from "@/components/PublicEntryCard";
 import { PopularApps } from "@/components/PopularApps";
 import { ViewTracker } from "@/components/ViewTracker";
@@ -66,7 +66,7 @@ export async function Showcase({
   const countViews = viewer?.id !== profile.user_id;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <header className="flex items-center gap-4">
         {profile.avatar_url ? (
           <Image
@@ -91,20 +91,21 @@ export async function Showcase({
         </div>
       </header>
 
-      {complete && (
-        <CompletionBanner startDate={startDate} celebrate name={name} />
+      {/* A finished challenge gets one slim banner: the progress bar and the
+          stat cards would only repeat it (100 of 100, none missed), and they
+          pushed the apps off the first screen. A challenge still in progress
+          keeps them, because there they say something. */}
+      {complete ? (
+        <CompletionBanner startDate={startDate} celebrate name={name} compact />
+      ) : (
+        <>
+          <ProgressBar current={todayDayNumber} />
+          <StreakBanner streak={streak} />
+        </>
       )}
 
-      <ProgressBar current={todayDayNumber} />
-
-      <StreakBanner streak={streak} />
-
-      {badges.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-lg font-semibold">Badges</h2>
-          <TrophyCase earned={earned} />
-        </section>
-      )}
+      {/* One line tall on purpose: the page is about the apps (see BadgeStrip). */}
+      <BadgeStrip earned={earned} />
 
       <PopularApps entries={popular} handle={ownerHandle} />
 
@@ -112,15 +113,18 @@ export async function Showcase({
         <h2 className="mb-1 text-lg font-semibold">
           All {entries.length} {entries.length === 1 ? "app" : "apps"}
         </h2>
-        <p className="mb-3 text-sm text-zinc-500">
-          In no particular order. Each card shows the day it was built.
+        <p className="mb-4 text-sm text-zinc-500">
+          Try any of them, and tap &ldquo;Notify me&rdquo; on the ones
+          you&apos;d actually use. Shown in no particular order.
         </p>
         {shuffled.length === 0 ? (
           <div className="rounded-lg border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
             No entries logged yet.
           </div>
         ) : (
-          <div className="space-y-4">
+          // items-start: opening one card's form or details must not stretch
+          // the other cards in its row.
+          <div className="grid items-start gap-4 sm:grid-cols-2 md:grid-cols-3">
             {shuffled.map((e) => (
               <PublicEntryCard key={e.id} entry={e} handle={ownerHandle} />
             ))}
