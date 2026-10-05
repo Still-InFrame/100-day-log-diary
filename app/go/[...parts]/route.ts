@@ -6,6 +6,7 @@ import { clickCameFromAPage, looksAutomated } from "@/lib/bots";
 import { recordingEnabled } from "@/lib/recording";
 import { parseVisitorId } from "@/lib/visitor";
 import { placeFromHeaders } from "@/lib/geo";
+import { sourceColumns, sourceFromLink } from "@/lib/traffic-source";
 
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
 
@@ -78,16 +79,18 @@ export async function GET(
   // long as the browser says it came from one of our pages.
   const visitorId = parseVisitorId(req.nextUrl.searchParams.get("v"));
   const referrer = req.headers.get("referer");
+  // Every name this request says the site was reached by.
+  const siteHosts = [
+    req.nextUrl.host,
+    req.headers.get("x-forwarded-host"),
+    req.headers.get("host"),
+  ];
 
   // Best-effort telemetry — a logging failure must never block the redirect.
   if (
     recordingEnabled() &&
     !looksAutomated(userAgent) &&
-    clickCameFromAPage(visitorId, referrer, [
-      req.nextUrl.host,
-      req.headers.get("x-forwarded-host"),
-      req.headers.get("host"),
-    ])
+    clickCameFromAPage(visitorId, referrer, siteHosts)
   ) {
     try {
       const supabase = await createClient();
@@ -105,6 +108,9 @@ export async function GET(
           referrer: referrer?.slice(0, 2000) ?? null,
           user_agent: userAgent.slice(0, 1000),
           ...placeFromHeaders(req.headers),
+          // Where the visit came from, put on the link by ViewTracker next
+          // to the visitor ID. Absent when scripts are blocked.
+          ...sourceColumns(sourceFromLink(req.nextUrl.searchParams), siteHosts),
         });
       }
     } catch {

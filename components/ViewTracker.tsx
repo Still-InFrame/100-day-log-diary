@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
+import {
+  addSourceToLink,
+  currentVisitSource,
+  linkHasSource,
+} from "@/lib/traffic-source";
 
 const ENDPOINT = "/api/views";
 const VISITOR_KEY = "visitor-id";
@@ -12,7 +17,10 @@ const DWELL_MS = 1000;
 const FLUSH_EVERY_MS = 3000;
 
 function randomId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return crypto.randomUUID();
   }
   // Older browsers and non-secure contexts. Not for security, only for
@@ -39,12 +47,15 @@ function getVisitorId(): string {
 // Watches the app cards on a public page (elements marked data-app-day) and
 // reports which ones the visitor actually saw. Each card is reported at most
 // once per page load. It also adds the visitor ID to app links as they are
-// about to be used, so clicks can be counted per person. Renders nothing.
+// about to be used, so clicks can be counted per person, and notes where the
+// visit came from (see lib/traffic-source.ts) so views and clicks carry it.
+// Renders nothing.
 export function ViewTracker({ handle }: { handle: string }) {
   useEffect(() => {
     const visitorId = getVisitorId();
+    const source = currentVisitSource();
 
-    // ----- clicks: tag /go links with the visitor ID -----
+    // ----- clicks: tag /go links with the visitor ID and the source -----
     // Done when a link is about to be used (pointer down, or keyboard focus)
     // rather than up front, so it also covers links rendered later. The links
     // are plain anchors, so a click works the same with or without the tag.
@@ -54,9 +65,18 @@ export function ViewTracker({ handle }: { handle: string }) {
       const link = target.closest<HTMLAnchorElement>('a[href^="/go/"]');
       if (!link) return;
       try {
-        const url = new URL(link.getAttribute("href") ?? "", window.location.origin);
-        if (url.searchParams.get("v") === visitorId) return;
+        const url = new URL(
+          link.getAttribute("href") ?? "",
+          window.location.origin,
+        );
+        if (
+          url.searchParams.get("v") === visitorId &&
+          linkHasSource(url.searchParams)
+        ) {
+          return;
+        }
         url.searchParams.set("v", visitorId);
+        addSourceToLink(url.searchParams, source);
         link.setAttribute("href", url.pathname + url.search);
       } catch {
         // leave the link as it is
@@ -76,6 +96,7 @@ export function ViewTracker({ handle }: { handle: string }) {
         handle,
         days: [...pending],
         visitor: visitorId,
+        source,
       });
       pending.clear();
       // sendBeacon survives the page being closed; fall back to fetch.

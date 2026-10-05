@@ -3,6 +3,8 @@
 import { useId, useState, useTransition } from "react";
 import { submitInterest } from "@/app/actions/interest";
 import { smsConsentText } from "@/lib/constants";
+import { currentVisitSource } from "@/lib/traffic-source";
+import { trackPixelLead } from "@/components/MetaPixel";
 
 const inputClass =
   "block w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-950";
@@ -47,11 +49,14 @@ export function NotifyMeForm({
         phone,
         smsConsent: smsConsent && phone.trim() !== "",
         trap,
+        source: currentVisitSource(),
       });
       if (!result.ok) {
         setError(result.error);
         return;
       }
+      // A repeat signup is not a new lead.
+      if (!result.already) trackPixelLead(appName);
       setDone(result.already ? "already" : "new");
     });
   }

@@ -7,6 +7,7 @@ import type {
   InterestStat,
   Lead,
   Overview,
+  OverviewCounts,
   OverviewPlace,
   OverviewTotals,
   Profile,
@@ -158,6 +159,13 @@ export async function getOverview(
   if (error || !data) return null;
   const raw = data as Partial<Overview>;
   const t: Partial<OverviewTotals> = raw.totals ?? {};
+  const counts = (c: Partial<OverviewCounts>): OverviewCounts => ({
+    views: Number(c.views ?? 0),
+    unique_views: Number(c.unique_views ?? 0),
+    clicks: Number(c.clicks ?? 0),
+    unique_clicks: Number(c.unique_clicks ?? 0),
+    signups: Number(c.signups ?? 0),
+  });
   const place = (p: Partial<OverviewPlace>): OverviewPlace => ({
     country: p.country ?? null,
     region: p.region ?? null,
@@ -201,6 +209,19 @@ export async function getOverview(
     countries: (raw.countries ?? []).map(place),
     regions: (raw.regions ?? []).map(place),
     cities: (raw.cities ?? []).map(place),
+    channels: (raw.channels ?? []).map((c) => ({
+      channel: c.channel,
+      ...counts(c),
+    })),
+    sources: (raw.sources ?? []).map((s) => ({
+      channel: s.channel,
+      source: s.source ?? "",
+      ...counts(s),
+    })),
+    campaigns: (raw.campaigns ?? []).map((c) => ({
+      campaign: c.campaign,
+      ...counts(c),
+    })),
   };
 }
 

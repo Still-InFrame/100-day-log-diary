@@ -21,6 +21,7 @@ import {
 } from "@/lib/ghl";
 import { deleteConnection, getGhlAuthFor } from "@/lib/ghl-connection";
 import { placeFromHeaders } from "@/lib/geo";
+import { sourceColumns, type WireSource } from "@/lib/traffic-source";
 
 export type InterestInput = {
   // Whose public page the form was submitted on. The lead belongs to them.
@@ -35,6 +36,10 @@ export type InterestInput = {
   // were open before the rename.
   trap?: string;
   website?: string;
+  // Where this visit came from, as the page's script noted it on arrival
+  // (see lib/traffic-source.ts). Absent from pages opened before source
+  // tracking shipped.
+  source?: WireSource;
 };
 
 export type InterestResult =
@@ -74,7 +79,9 @@ export async function submitInterest(
   // whose phone autofilled the hidden field. A lost lead is worse than a junk
   // row, so a suspect signup is stored, flagged, and kept out of HighLevel
   // until the owner reviews it in the admin.
-  const suspectedAutomated = Boolean(input.trap?.trim() || input.website?.trim());
+  const suspectedAutomated = Boolean(
+    input.trap?.trim() || input.website?.trim(),
+  );
 
   const handle = (input.handle ?? "").trim().toLowerCase();
   const dayNumber = Number(input.dayNumber);
@@ -113,7 +120,9 @@ export async function submitInterest(
   const smsConsent = Boolean(input.smsConsent) && phone !== null;
 
   const profile = await getProfileByHandle(handle);
-  const entry = profile ? await getEntryByDay(profile.user_id, dayNumber) : null;
+  const entry = profile
+    ? await getEntryByDay(profile.user_id, dayNumber)
+    : null;
   if (!profile || !entry) {
     return { ok: false, error: "That app could not be found." };
   }
@@ -123,6 +132,10 @@ export async function submitInterest(
   // Country, state and city only. A signup carries a name, so it does not
   // get the map coordinates that anonymous views and clicks do.
   const { country, region, city } = placeFromHeaders(requestHeaders);
+  const source = sourceColumns(input.source, [
+    requestHeaders.get("x-forwarded-host"),
+    requestHeaders.get("host"),
+  ]);
   // The id is generated here because the anonymous role may insert but not
   // read, so the database cannot hand the new row's id back.
   const id = crypto.randomUUID();
@@ -139,13 +152,16 @@ export async function submitInterest(
     phone,
     sms_consent: smsConsent,
     sms_consent_at: smsConsent ? createdAt : null,
-    consent_text: smsConsent ? smsConsentText(entry.app_name).slice(0, 500) : null,
+    consent_text: smsConsent
+      ? smsConsentText(entry.app_name).slice(0, 500)
+      : null,
     referrer: requestHeaders.get("referer")?.slice(0, 2000) ?? null,
     user_agent: requestHeaders.get("user-agent")?.slice(0, 1000) ?? null,
     suspected_automated: suspectedAutomated,
     country,
     region,
     city,
+    ...source,
     created_at: createdAt,
   });
 
@@ -250,7 +266,9 @@ export async function retryLeadSync(leadId: string): Promise<AdminResult> {
       ghl_sync_status: result.error ? "failed" : "synced",
       ghl_contact_id: result.contactId ?? lead.ghl_contact_id,
       ghl_sync_error: result.error?.slice(0, 500) ?? null,
-      ghl_synced_at: result.error ? lead.ghl_synced_at : new Date().toISOString(),
+      ghl_synced_at: result.error
+        ? lead.ghl_synced_at
+        : new Date().toISOString(),
     })
     .eq("id", leadId);
 
@@ -283,7 +301,8 @@ export async function sendLeadText(
 
   const lead = await getLeadById(leadId);
   if (!lead) return { ok: false, error: "Lead not found." };
-  if (!lead.phone) return { ok: false, error: "This lead gave no phone number." };
+  if (!lead.phone)
+    return { ok: false, error: "This lead gave no phone number." };
   if (!lead.sms_consent) {
     return { ok: false, error: "This lead did not agree to receive texts." };
   }

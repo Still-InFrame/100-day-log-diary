@@ -3,6 +3,7 @@ import { POPULAR_MIN_VIEWERS } from "@/lib/constants";
 import { BarList, type BarListItem } from "@/components/admin/BarList";
 import { DailyActivityChart } from "@/components/admin/DailyActivityChart";
 import { GeoMap } from "@/components/admin/GeoMap";
+import { TrafficSources } from "@/components/admin/TrafficSources";
 import { toGeoPlaces } from "@/lib/geo/places";
 import type { Overview, OverviewApp } from "@/lib/types";
 
@@ -231,6 +232,17 @@ export function OverviewDashboard({
               )}
             </Card>
           </div>
+
+          <Card
+            title="Where traffic comes from"
+            subtitle="What sent each visit to your page."
+          >
+            <TrafficSources
+              channels={overview.channels}
+              sources={overview.sources}
+              campaigns={overview.campaigns}
+            />
+          </Card>
 
           <Card
             title="Where people are"

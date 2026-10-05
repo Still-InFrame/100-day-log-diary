@@ -22,6 +22,8 @@ export type Profile = {
   display_name: string | null;
   avatar_url: string | null;
   public_handle: string | null;
+  // The user's own Meta Pixel, loaded on their public page when set.
+  meta_pixel_id: string | null;
   challenge_start_date: string;
   created_at: string;
   updated_at: string;
@@ -54,6 +56,15 @@ export type Lead = {
   country: string | null;
   region: string | null;
   city: string | null;
+  // Where the visit that led to the signup came from (see
+  // lib/traffic-source.ts). `source_known` is false for signups made before
+  // this was recorded.
+  source_known: boolean;
+  ref_host: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  ad_click: string | null;
   created_at: string;
 };
 
@@ -139,6 +150,40 @@ export type OverviewPlace = {
   signups: number;
 };
 
+// The channels traffic_channel() (migration 0010) sorts visits into.
+// "unknown" = no source was recorded for the visit; "direct" = one was, and
+// it was empty.
+export type TrafficChannel =
+  | "search"
+  | "paid"
+  | "social"
+  | "ai"
+  | "email"
+  | "sms"
+  | "referral"
+  | "campaign"
+  | "direct"
+  | "unknown";
+
+export type OverviewCounts = {
+  views: number;
+  unique_views: number;
+  clicks: number;
+  unique_clicks: number;
+  signups: number;
+};
+
+export type OverviewChannel = OverviewCounts & { channel: TrafficChannel };
+
+// One specific source inside a channel: a link's utm_source if it has one,
+// else the site that sent the visitor, else "" (direct).
+export type OverviewSource = OverviewCounts & {
+  channel: TrafficChannel;
+  source: string;
+};
+
+export type OverviewCampaign = OverviewCounts & { campaign: string };
+
 export type Overview = {
   totals: OverviewTotals;
   daily: OverviewDay[];
@@ -147,6 +192,10 @@ export type Overview = {
   // The busiest 500 of each.
   regions: OverviewPlace[];
   cities: OverviewPlace[];
+  channels: OverviewChannel[];
+  // The busiest 50 of each.
+  sources: OverviewSource[];
+  campaigns: OverviewCampaign[];
 };
 
 export type BadgeType =

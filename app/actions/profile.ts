@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { OWNER_HANDLE } from "@/lib/constants";
+import { parsePixelId } from "@/lib/meta-pixel";
 
 // 3-30 chars, lowercase alphanumeric + hyphens, no leading/trailing hyphen.
 // The handle becomes part of a public URL, so keep it URL-safe.
@@ -12,7 +13,9 @@ export type HandleResult =
   | { ok: true; handle: string | null }
   | { ok: false; error: string };
 
-export async function setPublicHandle(raw: string | null): Promise<HandleResult> {
+export async function setPublicHandle(
+  raw: string | null,
+): Promise<HandleResult> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -81,4 +84,44 @@ export async function setPublicHandle(raw: string | null): Promise<HandleResult>
   revalidatePath("/profile");
   revalidatePath(`/share/${handle}`);
   return { ok: true, handle };
+}
+
+export type PixelResult =
+  | { ok: true; pixelId: string | null }
+  | { ok: false; error: string };
+
+// Saves or clears the caller's Meta Pixel ID. Empty input turns the pixel
+// off. The pixel itself is loaded by components/MetaPixel.tsx on the user's
+// public page.
+export async function setMetaPixelId(raw: string | null): Promise<PixelResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Please sign in again." };
+
+  const parsed = parsePixelId(raw);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      error:
+        "That doesn't look like a Pixel ID. It is a number, usually 15 or 16 digits, shown in Meta Events Manager under Data sources.",
+    };
+  }
+
+  // The row comes back so a save that matched nothing is reported instead of
+  // looking like a success, and so the right public page can be refreshed.
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({ meta_pixel_id: parsed.pixelId })
+    .eq("user_id", user.id)
+    .select("public_handle")
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "Your profile could not be found." };
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/");
+  if (data.public_handle) revalidatePath(`/share/${data.public_handle}`);
+  return { ok: true, pixelId: parsed.pixelId };
 }

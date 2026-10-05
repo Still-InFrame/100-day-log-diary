@@ -12,6 +12,7 @@ import { BadgeStrip } from "@/components/BadgeStrip";
 import { PublicEntryCard } from "@/components/PublicEntryCard";
 import { PopularApps } from "@/components/PopularApps";
 import { ViewTracker } from "@/components/ViewTracker";
+import { MetaPixel } from "@/components/MetaPixel";
 import type { Badge, BadgeType, Entry, Profile } from "@/lib/types";
 
 // The public, read-only view of one person's challenge. Rendered at "/" for
@@ -133,6 +134,9 @@ export async function Showcase({
       </section>
 
       {countViews && <ViewTracker handle={ownerHandle} />}
+      {countViews && profile.meta_pixel_id && (
+        <MetaPixel pixelId={profile.meta_pixel_id} />
+      )}
 
       <footer className="border-t border-zinc-200 pt-6 text-center text-xs text-zinc-400 dark:border-zinc-800">
         Public progress page · 100 Day Log Diary
