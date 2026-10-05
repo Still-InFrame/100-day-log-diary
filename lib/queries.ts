@@ -1,7 +1,7 @@
 import { createClient } from "./supabase/server";
 import type {
   Badge,
-  ClickStat,
+  EngagementStat,
   Entry,
   InterestStat,
   Lead,
@@ -107,18 +107,30 @@ export async function getLeadCount(): Promise<number> {
   return count ?? 0;
 }
 
-// Aggregated in the database (see migration 0003): a plain select is capped
+// Aggregated in the database (see migration 0005): a plain select is capped
 // at 1000 rows and would undercount once traffic grows.
-export async function getClickStats(): Promise<ClickStat[]> {
+export async function getEngagementStats(): Promise<EngagementStat[]> {
   const supabase = await createClient();
-  const { data } = await supabase.rpc("app_click_stats");
-  return ((data as ClickStat[] | null) ?? []).map((r) => ({
+  const { data } = await supabase.rpc("app_engagement_stats");
+  return ((data as EngagementStat[] | null) ?? []).map((r) => ({
     day_number: r.day_number,
+    views: Number(r.views),
     clicks: Number(r.clicks),
     live_clicks: Number(r.live_clicks),
     code_clicks: Number(r.code_clicks),
+    popular_clicks: Number(r.popular_clicks),
     last_click: r.last_click,
   }));
+}
+
+// Day numbers of one user's "Most popular" apps, best first. Public: works
+// for anonymous visitors, and returns nothing until apps clear the bar.
+export async function getPopularDays(ownerUserId: string): Promise<number[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("popular_apps", { p_owner: ownerUserId });
+  return ((data as { day_number: number }[] | null) ?? []).map(
+    (r) => r.day_number,
+  );
 }
 
 export async function getInterestStats(): Promise<InterestStat[]> {

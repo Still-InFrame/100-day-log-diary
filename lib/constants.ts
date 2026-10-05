@@ -6,6 +6,15 @@ export const TOTAL_DAYS = 100;
 // showcase + /go links must carry the handle instead of this constant.
 export const OWNER_HANDLE = "savion";
 
+// The bar an app must clear to appear in the public "Most popular" row, and
+// how many apps that row shows. The ranking itself runs in the database
+// (popular_apps() in migration 0005), where the same numbers are fixed so an
+// anonymous caller cannot lower them. These copies are for explaining the
+// rule in the admin. Change both together.
+export const POPULAR_MIN_CLICKS = 10;
+export const POPULAR_MIN_VIEWS = 50;
+export const POPULAR_COUNT = 3;
+
 // The exact sentence shown beside the SMS checkbox on the "Notify me" form.
 // The form displays it and the server stores it as the consent record, so both
 // must come from this one place.

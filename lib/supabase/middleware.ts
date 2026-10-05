@@ -42,6 +42,8 @@ export async function updateSession(request: NextRequest) {
   // Crawlers fetch this without a session; redirecting it to /login would
   // make the robots rules unreadable.
   const isRobots = url.pathname === "/robots.txt";
+  // Anonymous visitors' browsers post the app cards they saw here.
+  const isViewBeacon = url.pathname === "/api/views";
 
   if (
     !user &&
@@ -49,7 +51,8 @@ export async function updateSession(request: NextRequest) {
     !isPublicShare &&
     !isPublicHome &&
     !isTrackedRedirect &&
-    !isRobots
+    !isRobots &&
+    !isViewBeacon
   ) {
     const redirect = url.clone();
     redirect.pathname = "/login";

@@ -16,6 +16,11 @@ export function PublicEntryCard({
 }) {
   return (
     <article className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+      {/* The heading block is what ViewTracker watches to decide the card was
+          seen. It is the block, not the whole card, because a card with a
+          tall screenshot can be longer than the screen and would never be
+          "mostly visible". */}
+      <div data-app-day={entry.day_number}>
       <div className="flex items-baseline justify-between gap-3">
         <div className="text-xs font-medium uppercase tracking-wide text-indigo-500">
           Day {entry.day_number}
@@ -70,6 +75,7 @@ export function PublicEntryCard({
             View code →
           </a>
         )}
+      </div>
       </div>
 
       <NotifyMeForm

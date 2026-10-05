@@ -49,11 +49,16 @@ export type Lead = {
   created_at: string;
 };
 
-export type ClickStat = {
+// Per-app views and clicks. `views`, `clicks`, `live_clicks` and `code_clicks`
+// come from the shuffled list only; `popular_clicks` are clicks made from the
+// "Most popular" row and are kept out of the click rate.
+export type EngagementStat = {
   day_number: number;
+  views: number;
   clicks: number;
   live_clicks: number;
   code_clicks: number;
+  popular_clicks: number;
   last_click: string | null;
 };
 
