@@ -60,7 +60,10 @@ export default async function ProfilePage() {
       <div className="grid gap-3 sm:grid-cols-3">
         <Stat label="Badges earned" value={`${badges.length} / 9`} />
         <Stat label="Apps shipped" value={`${entries.length}`} />
-        <Stat label="Current streak" value={`${streak.current} 🔥`} />
+        <Stat
+          label="Current streak"
+          value={complete ? "Complete ✓" : `${streak.current} 🔥`}
+        />
       </div>
 
       <ShareSettings initialHandle={profile?.public_handle ?? null} />
