@@ -4,6 +4,7 @@ import { getProfileByHandle } from "@/lib/queries";
 import { looksAutomated } from "@/lib/bots";
 import { recordingEnabled } from "@/lib/recording";
 import { parseVisitorId } from "@/lib/visitor";
+import { placeFromHeaders } from "@/lib/geo";
 import { TOTAL_DAYS } from "@/lib/constants";
 
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
   if (user?.id === profile.user_id) return done();
 
   const visitorId = parseVisitorId(payload.visitor);
+  const place = placeFromHeaders(req.headers);
 
   // Best-effort: a failed write only loses a few views.
   await supabase.from("app_events").insert(
@@ -65,6 +67,7 @@ export async function POST(req: NextRequest) {
       day_number: day,
       source: "list",
       visitor_id: visitorId,
+      ...place,
     })),
   );
 

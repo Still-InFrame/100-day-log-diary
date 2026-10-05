@@ -20,6 +20,7 @@ import {
   upsertContact,
 } from "@/lib/ghl";
 import { deleteConnection, getGhlAuthFor } from "@/lib/ghl-connection";
+import { placeFromHeaders } from "@/lib/geo";
 
 export type InterestInput = {
   // Whose public page the form was submitted on. The lead belongs to them.
@@ -119,6 +120,9 @@ export async function submitInterest(
   const pageOwnerId = profile.user_id;
 
   const requestHeaders = await headers();
+  // Country, state and city only. A signup carries a name, so it does not
+  // get the map coordinates that anonymous views and clicks do.
+  const { country, region, city } = placeFromHeaders(requestHeaders);
   // The id is generated here because the anonymous role may insert but not
   // read, so the database cannot hand the new row's id back.
   const id = crypto.randomUUID();
@@ -139,6 +143,9 @@ export async function submitInterest(
     referrer: requestHeaders.get("referer")?.slice(0, 2000) ?? null,
     user_agent: requestHeaders.get("user-agent")?.slice(0, 1000) ?? null,
     suspected_automated: suspectedAutomated,
+    country,
+    region,
+    city,
     created_at: createdAt,
   });
 
@@ -247,7 +254,7 @@ export async function retryLeadSync(leadId: string): Promise<AdminResult> {
     })
     .eq("id", leadId);
 
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
   if (result.error) return { ok: false, error: result.error };
   if (error) {
     return {
@@ -302,7 +309,7 @@ export async function sendLeadText(
     .update({ last_texted_at: new Date().toISOString() })
     .eq("id", leadId);
 
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
   // "Handed to HighLevel", not "delivered": delivery is reported there.
   return {
     ok: true,
@@ -356,6 +363,6 @@ export async function disconnectHighLevel(): Promise<AdminResult> {
   if (!user) return { ok: false, error: "Please sign in again." };
   const { error } = await deleteConnection(user.id);
   if (error) return { ok: false, error };
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
   return { ok: true, message: "Disconnected." };
 }

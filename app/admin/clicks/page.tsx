@@ -3,37 +3,47 @@ import {
   getEngagementStats,
   getEntries,
   getInterestStats,
+  getOverview,
   getPopularDays,
-  getVisitorTotals,
 } from "@/lib/queries";
 import {
   POPULAR_COUNT,
   POPULAR_MIN_CLICKERS,
   POPULAR_MIN_VIEWERS,
 } from "@/lib/constants";
-import { formatDateTime, formatDateTimeShort } from "@/lib/dates";
+import { formatDateTime, formatDateTimeShort, todayISO } from "@/lib/dates";
+import { resolveRange } from "@/lib/overview-range";
 import {
   PopularityTable,
   type PopularityRow,
 } from "@/components/admin/PopularityTable";
+import { RangeFilter } from "@/components/admin/RangeFilter";
 import type { EngagementStat } from "@/lib/types";
 
-// The ranking rule lives in the database (popular_apps()); these helpers
-// mirror it so the table can explain where each app stands. "Unique" counts
-// people (one browser = one person); "total" counts every view or click.
+// Two sets of numbers meet on this page:
+//  - what the table and tiles COUNT follows the date range at the top;
+//  - each app's STATUS, and the order "sort by status" gives, is the site's
+//    live ranking, which always uses everything on record. The public page
+//    ranks apps that way, so a status worked out from a date range would
+//    describe a ranking that exists nowhere.
+// The ranking rule itself lives in the database (popular_apps()); the helpers
+// below mirror it so the table can explain where each app stands. "Unique"
+// counts people (one browser = one person); "total" counts every view or
+// click.
 
-const NO_ACTIVITY: Omit<EngagementStat, "day_number"> = {
+type Counts = Pick<
+  EngagementStat,
+  "views" | "unique_views" | "clicks" | "unique_clicks"
+>;
+
+const NO_COUNTS: Counts = {
   views: 0,
-  clicks: 0,
-  live_clicks: 0,
-  code_clicks: 0,
-  popular_clicks: 0,
-  last_click: null,
   unique_views: 0,
+  clicks: 0,
   unique_clicks: 0,
 };
 
-function qualifies(s: Pick<EngagementStat, "unique_clicks" | "unique_views">): boolean {
+function qualifies(s: Pick<Counts, "unique_clicks" | "unique_views">): boolean {
   return (
     s.unique_clicks >= POPULAR_MIN_CLICKERS &&
     s.unique_views >= POPULAR_MIN_VIEWERS
@@ -51,8 +61,11 @@ function formatRate(r: number | null): string {
   return r === null ? "—" : `${Math.round(r * 100)}%`;
 }
 
+// Clicks beyond each person's first: people coming back to the app.
+const repeatClicks = (s: Counts) => Math.max(0, s.clicks - s.unique_clicks);
+
 // What an app still needs before it can be ranked.
-function shortfall(s: Pick<EngagementStat, "unique_clicks" | "unique_views">): string {
+function shortfall(s: Pick<Counts, "unique_clicks" | "unique_views">): string {
   const needs: string[] = [];
   if (s.unique_views < POPULAR_MIN_VIEWERS) {
     needs.push(`${POPULAR_MIN_VIEWERS - s.unique_views} more unique views`);
@@ -63,46 +76,67 @@ function shortfall(s: Pick<EngagementStat, "unique_clicks" | "unique_views">): s
   return `Needs ${needs.join(" and ")}`;
 }
 
-export default async function AdminClicksPage() {
+export default async function AdminClicksPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await requireUser();
-  const [stats, interest, entries, popularDays, totals] = await Promise.all([
-    getEngagementStats(),
-    getInterestStats(),
-    getEntries(user.id),
-    getPopularDays(user.id),
-    getVisitorTotals(),
-  ]);
+  const today = todayISO();
+  const range = resolveRange(await searchParams, today);
+  const [inRange, allTimeStats, allTimeLeads, entries, popularDays] =
+    await Promise.all([
+      getOverview(range.from, range.to),
+      getEngagementStats(),
+      getInterestStats(),
+      getEntries(user.id),
+      getPopularDays(user.id),
+    ]);
+  const allTime = range.preset === "all";
 
-  const statsByDay = new Map(stats.map((s) => [s.day_number, s]));
-  const leadsByDay = new Map(interest.map((s) => [s.day_number, s.leads]));
+  const rangeByDay = new Map(
+    (inRange?.apps ?? []).map((a) => [a.day_number, a]),
+  );
+  const everByDay = new Map(allTimeStats.map((s) => [s.day_number, s]));
+  const leadsEverByDay = new Map(
+    allTimeLeads.map((s) => [s.day_number, s.leads]),
+  );
   const popularRank = new Map(popularDays.map((day, i) => [day, i + 1]));
 
   // Every app gets a row, including ones nobody has seen yet.
   const unordered = entries.map((entry) => {
-    const s = statsByDay.get(entry.day_number) ?? NO_ACTIVITY;
+    const shown = rangeByDay.get(entry.day_number);
+    const counts: Counts = shown ?? NO_COUNTS;
+    const ever: Counts = everByDay.get(entry.day_number) ?? NO_COUNTS;
     const rank = popularRank.get(entry.day_number);
-    const ranked = qualifies(s);
+    const ranked = qualifies(ever);
+    const lastClick = shown?.last_click ?? null;
     return {
       day: entry.day_number,
       app: entry.app_name,
-      uniqueViews: s.unique_views,
-      views: s.views,
-      uniqueClicks: s.unique_clicks,
-      clicks: s.clicks,
-      popularClicks: s.popular_clicks,
-      rate: rate(s.unique_clicks, s.unique_views),
-      // Clicks beyond each person's first: people coming back to the app.
-      repeat: Math.max(0, s.clicks - s.unique_clicks),
-      signups: leadsByDay.get(entry.day_number) ?? 0,
+      uniqueViews: counts.unique_views,
+      views: counts.views,
+      uniqueClicks: counts.unique_clicks,
+      clicks: counts.clicks,
+      popularClicks: shown?.popular_clicks ?? 0,
+      rate: rate(counts.unique_clicks, counts.unique_views),
+      repeat: repeatClicks(counts),
+      signups: shown?.signups ?? 0,
       status: rank
         ? ({ kind: "popular", rank } as const)
         : ranked
           ? ({ kind: "ranked" } as const)
-          : ({ kind: "needs", text: shortfall(s) } as const),
+          : ({ kind: "needs", text: shortfall(ever) } as const),
+      lastClick,
+      lastClickLabel: lastClick ? formatDateTimeShort(lastClick) : null,
+      lastClickFull: lastClick ? formatDateTime(lastClick) : null,
+      // What the ranking order below is worked out from: all-time figures.
       ranked,
-      lastClick: s.last_click,
-      lastClickLabel: s.last_click ? formatDateTimeShort(s.last_click) : null,
-      lastClickFull: s.last_click ? formatDateTime(s.last_click) : null,
+      everRate: rate(ever.unique_clicks, ever.unique_views),
+      everRepeat: repeatClicks(ever),
+      everSignups: leadsEverByDay.get(entry.day_number) ?? 0,
+      everUniqueClicks: ever.unique_clicks,
+      everUniqueViews: ever.unique_views,
     };
   });
 
@@ -112,16 +146,17 @@ export default async function AdminClicksPage() {
     if (a.ranked !== b.ranked) return a.ranked ? -1 : 1;
     if (a.ranked) {
       return (
-        Math.round((b.rate ?? 0) * 100) - Math.round((a.rate ?? 0) * 100) ||
-        b.repeat - a.repeat ||
-        b.signups - a.signups ||
+        Math.round((b.everRate ?? 0) * 100) -
+          Math.round((a.everRate ?? 0) * 100) ||
+        b.everRepeat - a.everRepeat ||
+        b.everSignups - a.everSignups ||
         a.day - b.day
       );
     }
     return (
-      b.uniqueClicks - a.uniqueClicks ||
-      b.uniqueViews - a.uniqueViews ||
-      b.signups - a.signups ||
+      b.everUniqueClicks - a.everUniqueClicks ||
+      b.everUniqueViews - a.everUniqueViews ||
+      b.everSignups - a.everSignups ||
       a.day - b.day
     );
   });
@@ -145,28 +180,49 @@ export default async function AdminClicksPage() {
   }));
 
   const rankedCount = unordered.filter((r) => r.ranked).length;
+  const totals = inRange?.totals;
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Tile label="Total views" value={String(totals.views)} />
-        <Tile
-          label="Unique views"
-          value={String(totals.people_saw)}
-          note="people who saw an app"
-        />
-        <Tile label="Total clicks" value={String(totals.clicks)} />
-        <Tile
-          label="Unique clicks"
-          value={String(totals.people_clicked)}
-          note={`${formatRate(rate(totals.people_clicked, totals.people_saw))} of unique views`}
-        />
-        <Tile
-          label="Apps ranked"
-          value={String(rankedCount)}
-          note={`top ${POPULAR_COUNT} show as Most popular`}
-        />
+      {/* One filter, above everything it changes. */}
+      <div className="space-y-2">
+        <RangeFilter range={range} basePath="/admin/clicks" today={today} />
+        {!allTime && (
+          <p className="text-xs text-zinc-500">
+            The counts below are for these dates. Status, and the number of apps
+            ranked, always use everything on record, because that is how your
+            public page ranks them.
+          </p>
+        )}
       </div>
+
+      {totals ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <Tile label="Total views" value={String(totals.views)} />
+          <Tile
+            label="Unique views"
+            value={String(totals.unique_views)}
+            note="people who saw an app"
+          />
+          <Tile label="Total clicks" value={String(totals.clicks)} />
+          <Tile
+            label="Unique clicks"
+            value={String(totals.unique_clicks)}
+            note={`${formatRate(rate(totals.unique_clicks, totals.unique_views))} of unique views`}
+          />
+          <Tile
+            label="Apps ranked"
+            value={String(rankedCount)}
+            note={`all time; top ${POPULAR_COUNT} show as Most popular`}
+          />
+        </div>
+      ) : (
+        <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+          The counts for these dates could not be loaded, so the table below
+          shows zeros. Each app&rsquo;s status is still right. Reload the page
+          to try again.
+        </div>
+      )}
 
       <section>
         <h2 className="mb-1 text-lg font-semibold">Popularity by app</h2>
@@ -174,10 +230,10 @@ export default async function AdminClicksPage() {
           Total counts every view or click. Unique counts each person once,
           however often they come back. Click rate is unique clicks out of
           unique views. An app is ranked once it has {POPULAR_MIN_CLICKERS}{" "}
-          unique clicks and {POPULAR_MIN_VIEWERS} unique views; ranked apps
-          are ordered by click rate, then repeat clicks, then signups, and
-          the top {POPULAR_COUNT} appear as &ldquo;Most popular&rdquo; on your
-          public page.
+          unique clicks and {POPULAR_MIN_VIEWERS} unique views; ranked apps are
+          ordered by click rate, then repeat clicks, then signups, and the top{" "}
+          {POPULAR_COUNT} appear as &ldquo;Most popular&rdquo; on your public
+          page.
         </p>
         <p className="mb-4 text-xs text-zinc-500">
           A person is one browser, so the same person on a phone and a laptop

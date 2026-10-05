@@ -1,12 +1,15 @@
 import { createClient } from "./supabase/server";
+import { DEFAULT_TIMEZONE } from "./constants";
 import type {
   Badge,
   EngagementStat,
   Entry,
   InterestStat,
   Lead,
+  Overview,
+  OverviewPlace,
+  OverviewTotals,
   Profile,
-  VisitorTotals,
 } from "./types";
 
 export async function getCurrentUser() {
@@ -126,18 +129,6 @@ export async function getEngagementStats(): Promise<EngagementStat[]> {
   }));
 }
 
-export async function getVisitorTotals(): Promise<VisitorTotals> {
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("app_visitor_totals");
-  const row = (data as VisitorTotals[] | null)?.[0];
-  return {
-    views: Number(row?.views ?? 0),
-    clicks: Number(row?.clicks ?? 0),
-    people_saw: Number(row?.people_saw ?? 0),
-    people_clicked: Number(row?.people_clicked ?? 0),
-  };
-}
-
 // Day numbers of one user's "Most popular" apps, best first. Public: works
 // for anonymous visitors, and returns nothing until apps clear the bar.
 export async function getPopularDays(ownerUserId: string): Promise<number[]> {
@@ -146,6 +137,71 @@ export async function getPopularDays(ownerUserId: string): Promise<number[]> {
   return ((data as { day_number: number }[] | null) ?? []).map(
     (r) => r.day_number,
   );
+}
+
+// Everything the admin overview shows for one date range, from a single
+// database call so the tiles, charts and map cannot disagree. `from` and
+// `to` are yyyy-MM-dd days in the app's timezone, both included; a null
+// `from` means from the beginning.
+// Returns null when the call fails, so the page can say so instead of
+// drawing a dashboard full of zeros.
+export async function getOverview(
+  from: string | null,
+  to: string,
+): Promise<Overview | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("app_overview", {
+    p_from: from,
+    p_to: to,
+    p_tz: DEFAULT_TIMEZONE,
+  });
+  if (error || !data) return null;
+  const raw = data as Partial<Overview>;
+  const t: Partial<OverviewTotals> = raw.totals ?? {};
+  const place = (p: Partial<OverviewPlace>): OverviewPlace => ({
+    country: p.country ?? null,
+    region: p.region ?? null,
+    city: p.city ?? null,
+    lat: p.lat == null ? null : Number(p.lat),
+    lon: p.lon == null ? null : Number(p.lon),
+    views: Number(p.views ?? 0),
+    unique_views: Number(p.unique_views ?? 0),
+    clicks: Number(p.clicks ?? 0),
+    unique_clicks: Number(p.unique_clicks ?? 0),
+    signups: Number(p.signups ?? 0),
+  });
+  return {
+    totals: {
+      views: Number(t.views ?? 0),
+      unique_views: Number(t.unique_views ?? 0),
+      clicks: Number(t.clicks ?? 0),
+      unique_clicks: Number(t.unique_clicks ?? 0),
+      live_clicks: Number(t.live_clicks ?? 0),
+      code_clicks: Number(t.code_clicks ?? 0),
+      signups: Number(t.signups ?? 0),
+    },
+    daily: (raw.daily ?? []).map((d) => ({
+      day: d.day,
+      views: Number(d.views),
+      unique_views: Number(d.unique_views),
+      clicks: Number(d.clicks),
+      unique_clicks: Number(d.unique_clicks),
+      signups: Number(d.signups),
+    })),
+    apps: (raw.apps ?? []).map((a) => ({
+      day_number: Number(a.day_number),
+      views: Number(a.views),
+      unique_views: Number(a.unique_views),
+      clicks: Number(a.clicks),
+      unique_clicks: Number(a.unique_clicks),
+      signups: Number(a.signups),
+      popular_clicks: Number(a.popular_clicks ?? 0),
+      last_click: a.last_click ?? null,
+    })),
+    countries: (raw.countries ?? []).map(place),
+    regions: (raw.regions ?? []).map(place),
+    cities: (raw.cities ?? []).map(place),
+  };
 }
 
 export async function getInterestStats(): Promise<InterestStat[]> {

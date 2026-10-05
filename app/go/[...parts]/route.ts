@@ -5,6 +5,7 @@ import { OWNER_HANDLE, TOTAL_DAYS } from "@/lib/constants";
 import { looksAutomated } from "@/lib/bots";
 import { recordingEnabled } from "@/lib/recording";
 import { parseVisitorId } from "@/lib/visitor";
+import { placeFromHeaders } from "@/lib/geo";
 
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
 
@@ -90,6 +91,7 @@ export async function GET(
           visitor_id: parseVisitorId(req.nextUrl.searchParams.get("v")),
           referrer: req.headers.get("referer")?.slice(0, 2000) ?? null,
           user_agent: userAgent.slice(0, 1000),
+          ...placeFromHeaders(req.headers),
         });
       }
     } catch {

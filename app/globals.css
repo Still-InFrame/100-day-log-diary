@@ -18,3 +18,61 @@
     --foreground: #fafafa;
   }
 }
+
+/* Chart colors for the admin overview. Each measure keeps one color on
+   every chart, so color means the same thing across the page. The light and
+   dark steps were each checked for colorblind separation and contrast
+   against the card they sit on (white / zinc-900); if a card background or
+   one of these values changes, they need checking again as a set. */
+.viz {
+  --viz-views: #2a78d6;
+  --viz-clicks: #eb6834;
+  --viz-signups: #1baf7a;
+  --viz-surface: #ffffff;
+  --viz-grid: #e4e4e7;
+  --viz-axis: #d4d4d8;
+  --viz-label: #71717a;
+
+  /* The map: one blue, five shades, more people = stronger. Blue because
+     the map counts views. `seq-ink` is the text color that stays readable
+     on top of each shade. */
+  --viz-seq-1: #86b6ef;
+  --viz-seq-2: #5598e7;
+  --viz-seq-3: #2a78d6;
+  --viz-seq-4: #1c5cab;
+  --viz-seq-5: #104281;
+  --viz-seq-ink-1: #18181b;
+  --viz-seq-ink-2: #18181b;
+  --viz-seq-ink-3: #ffffff;
+  --viz-seq-ink-4: #ffffff;
+  --viz-seq-ink-5: #ffffff;
+  --viz-land: #e4e4e7;
+  --viz-focus: #cde2fb;
+}
+
+@media (prefers-color-scheme: dark) {
+  .viz {
+    --viz-views: #3987e5;
+    --viz-clicks: #d95926;
+    --viz-signups: #199e70;
+    --viz-surface: #18181b;
+    --viz-grid: #27272a;
+    --viz-axis: #3f3f46;
+    --viz-label: #a1a1aa;
+
+    /* On a dark card the scale runs dim to bright, ending on a vivid blue
+       (not a pale one), so "stronger color = more people" holds here too. */
+    --viz-seq-1: #184f95;
+    --viz-seq-2: #1f62b8;
+    --viz-seq-3: #2a78d6;
+    --viz-seq-4: #3d8ef0;
+    --viz-seq-5: #5aa5ff;
+    --viz-seq-ink-1: #ffffff;
+    --viz-seq-ink-2: #ffffff;
+    --viz-seq-ink-3: #ffffff;
+    --viz-seq-ink-4: #18181b;
+    --viz-seq-ink-5: #18181b;
+    --viz-land: #34343a;
+    --viz-focus: #1d3557;
+  }
+}
