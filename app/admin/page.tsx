@@ -36,6 +36,11 @@ const SYNC_BADGE: Record<GhlSyncStatus, { label: string; className: string }> = 
   },
 };
 
+const HELD_BACK_BADGE = {
+  label: "Held back for review",
+  className: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200",
+};
+
 function textBlockedReason(lead: Lead, connected: boolean): string | null {
   if (!lead.phone) return "no phone number given";
   if (!lead.sms_consent) return "they did not agree to texts";
@@ -171,7 +176,13 @@ export default async function AdminInterestPage() {
         ) : (
           <div className="space-y-3">
             {leads.map((lead) => {
-              const badge = SYNC_BADGE[lead.ghl_sync_status];
+              // A flagged signup that has not been sent yet is "held back",
+              // whatever its sync status says.
+              const heldBack =
+                lead.suspected_automated && lead.ghl_sync_status !== "synced";
+              const badge = heldBack
+                ? HELD_BACK_BADGE
+                : SYNC_BADGE[lead.ghl_sync_status];
               return (
                 <article
                   key={lead.id}
@@ -209,6 +220,14 @@ export default async function AdminInterestPage() {
                   {lead.last_texted_at && (
                     <div className="mt-1 text-xs text-zinc-500">
                       Last texted {formatDateTime(lead.last_texted_at)}
+                    </div>
+                  )}
+                  {heldBack && (
+                    <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                      Not sent to HighLevel automatically: the form&apos;s
+                      hidden anti-bot field was filled in. Bots do that, but
+                      so can a phone&apos;s autofill for a real person. If this
+                      looks real, send it yourself.
                     </div>
                   )}
                   {lead.ghl_sync_status === "failed" && lead.ghl_sync_error && (

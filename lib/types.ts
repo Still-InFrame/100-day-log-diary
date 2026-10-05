@@ -46,6 +46,9 @@ export type Lead = {
   ghl_sync_error: string | null;
   ghl_synced_at: string | null;
   last_texted_at: string | null;
+  // The form's hidden anti-bot field was filled. The lead is kept but is not
+  // pushed to HighLevel until the owner sends it.
+  suspected_automated: boolean;
   created_at: string;
 };
 

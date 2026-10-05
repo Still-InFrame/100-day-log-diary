@@ -29,7 +29,10 @@ export type InterestInput = {
   email: string;
   phone?: string;
   smsConsent: boolean;
-  // Honeypot. Hidden from people; a value here means a bot filled the form.
+  // Honeypot. Hidden from people; a value here suggests a bot filled the
+  // form. `website` is the field's old name, still accepted from pages that
+  // were open before the rename.
+  trap?: string;
   website?: string;
 };
 
@@ -44,6 +47,8 @@ export type AdminResult =
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
 const MAX_TEXT_LENGTH = 1000;
+const HELD_BACK_NOTE =
+  "Held back: the form's hidden anti-bot field was filled in";
 
 // Returns "+<digits>" or null when the input does not look like a phone
 // number. A bare 10-digit number is treated as US/Canada, since that is where
@@ -63,8 +68,12 @@ function normalizePhone(raw: string): string | null {
 export async function submitInterest(
   input: InterestInput,
 ): Promise<InterestResult> {
-  // Report success so a bot learns nothing, but store and send nothing.
-  if (input.website?.trim()) return { ok: true };
+  // A filled honeypot does NOT discard the signup. It used to (returning
+  // success and storing nothing), and that silently dropped a real person
+  // whose phone autofilled the hidden field. A lost lead is worse than a junk
+  // row, so a suspect signup is stored, flagged, and kept out of HighLevel
+  // until the owner reviews it in the admin.
+  const suspectedAutomated = Boolean(input.trap?.trim() || input.website?.trim());
 
   const handle = (input.handle ?? "").trim().toLowerCase();
   const dayNumber = Number(input.dayNumber);
@@ -129,6 +138,7 @@ export async function submitInterest(
     consent_text: smsConsent ? smsConsentText(entry.app_name).slice(0, 500) : null,
     referrer: requestHeaders.get("referer")?.slice(0, 2000) ?? null,
     user_agent: requestHeaders.get("user-agent")?.slice(0, 1000) ?? null,
+    suspected_automated: suspectedAutomated,
     created_at: createdAt,
   });
 
@@ -160,6 +170,10 @@ export async function submitInterest(
       });
 
     try {
+      if (suspectedAutomated) {
+        await record("skipped", null, HELD_BACK_NOTE);
+        return;
+      }
       const auth = await getGhlAuthFor(pageOwnerId);
       if (!auth.ok) {
         // Not connected is a normal state, not a failure. A broken or busy

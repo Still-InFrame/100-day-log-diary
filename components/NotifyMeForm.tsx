@@ -32,7 +32,7 @@ export function NotifyMeForm({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [smsConsent, setSmsConsent] = useState(false);
-  const [website, setWebsite] = useState("");
+  const [trap, setTrap] = useState("");
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,7 +46,7 @@ export function NotifyMeForm({
         email,
         phone,
         smsConsent: smsConsent && phone.trim() !== "",
-        website,
+        trap,
       });
       if (!result.ok) {
         setError(result.error);
@@ -161,19 +161,30 @@ export function NotifyMeForm({
       )}
 
       {/* Honeypot: kept off-screen and out of the tab order. People never
-          see it; a value here means a bot filled the form. */}
+          see it; a value here suggests a bot filled the form.
+
+          It must not look like anything a browser or password manager would
+          autofill. It was once labelled "Website", and a phone's contact
+          autofill appears to have filled it, which at the time made a real
+          signup vanish. Hence the meaningless name, autocomplete off, and the
+          ignore hints for password managers. The server no longer discards a
+          signup that trips this; it stores it and holds it for review. */}
       <div
         aria-hidden="true"
         className="absolute -left-[9999px] h-0 w-0 overflow-hidden"
       >
-        <label htmlFor={`${formId}-website`}>Website</label>
+        <label htmlFor={`${formId}-hp`}>Leave this field empty</label>
         <input
-          id={`${formId}-website`}
+          id={`${formId}-hp`}
+          name="hp_confirm"
           type="text"
           tabIndex={-1}
           autoComplete="off"
-          value={website}
-          onChange={(e) => setWebsite(e.target.value)}
+          data-1p-ignore
+          data-lpignore="true"
+          data-form-type="other"
+          value={trap}
+          onChange={(e) => setTrap(e.target.value)}
         />
       </div>
 
