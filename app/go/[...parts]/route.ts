@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getEntryByDay, getProfileByHandle } from "@/lib/queries";
 import { OWNER_HANDLE, TOTAL_DAYS } from "@/lib/constants";
-import { looksAutomated } from "@/lib/bots";
+import { clickCameFromAPage, looksAutomated } from "@/lib/bots";
 import { recordingEnabled } from "@/lib/recording";
 import { parseVisitorId } from "@/lib/visitor";
 import { placeFromHeaders } from "@/lib/geo";
@@ -16,8 +16,9 @@ const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
 // targets the live app. `&p=1` marks a click made from the "Most popular"
 // row, which is stored but kept out of the ranking.
 //
-// Not counted (the visitor is still redirected): automated clients, and the
-// page owner clicking on their own page while signed in.
+// Not counted (the visitor is still redirected): automated clients, requests
+// that did not come from a click on one of this site's pages, and the page
+// owner clicking on their own page while signed in.
 //
 //   /go/<handle>/<day>   any user's public page
 //   /go/<day>            the site owner's page (the original link format)
@@ -72,8 +73,22 @@ export async function GET(
   const userAgent = req.headers.get("user-agent") ?? "";
   const source = req.nextUrl.searchParams.get("p") === "1" ? "popular" : "list";
 
+  // Added to the link by ViewTracker in the visitor's browser. Absent when
+  // scripts are blocked; the click still counts then, as its own person, as
+  // long as the browser says it came from one of our pages.
+  const visitorId = parseVisitorId(req.nextUrl.searchParams.get("v"));
+  const referrer = req.headers.get("referer");
+
   // Best-effort telemetry — a logging failure must never block the redirect.
-  if (recordingEnabled() && !looksAutomated(userAgent)) {
+  if (
+    recordingEnabled() &&
+    !looksAutomated(userAgent) &&
+    clickCameFromAPage(visitorId, referrer, [
+      req.nextUrl.host,
+      req.headers.get("x-forwarded-host"),
+      req.headers.get("host"),
+    ])
+  ) {
     try {
       const supabase = await createClient();
       const {
@@ -86,10 +101,8 @@ export async function GET(
           day_number: dayNumber,
           target: resolvedTarget,
           source,
-          // Added to the link by ViewTracker in the visitor's browser. Absent
-          // when scripts are blocked; the click still counts, as its own person.
-          visitor_id: parseVisitorId(req.nextUrl.searchParams.get("v")),
-          referrer: req.headers.get("referer")?.slice(0, 2000) ?? null,
+          visitor_id: visitorId,
+          referrer: referrer?.slice(0, 2000) ?? null,
           user_agent: userAgent.slice(0, 1000),
           ...placeFromHeaders(req.headers),
         });
